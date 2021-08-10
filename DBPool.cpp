@@ -6,6 +6,7 @@
 #include "MyTime.h"
 #include "DBPool.h"
 
+
 namespace MYSQLNAMESPACE
 {
 
@@ -101,7 +102,7 @@ namespace MYSQLNAMESPACE
         }
 
         /*出错返回-1，成功返回传进col的所有字段类型所占的大小.*/
-        uint32_t fetchSelectSql(const dbCol *col, const char *tbName, const char *where, 
+        uint32_t fetchSelectSql(const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having,
             const char *order, uint32_t limit = 0, uint32_t limitFromNotZero = 0)
         {
             std::string sql;
@@ -132,6 +133,229 @@ namespace MYSQLNAMESPACE
             if(NULL != where && ::strlen(where) > 0){
                 sql += " WHERE ";
                 sql += where;
+            }
+
+            if(NULL != groupBy && ::strlen(groupBy) > 0){
+                sql += " GROUP BY ";
+                sql += groupBy;
+            }
+
+            if(NULL != having && ::strlen(having) > 0){
+                sql += " HAVING ";
+                sql += having;
+            }
+
+            if(NULL != order && ::strlen(order) > 0){
+                sql += " ORDER BY ";
+                sql += order;
+            }
+
+            if(limitFromNotZero){//分页查询，开始下标不从0开始查询
+                std::stringstream ss;
+                ss << " LIMIT " << limitFromNotZero << "," << limit;
+                sql += ss.str();
+            }else if(limit){//分页查询，默认从0下标开始查询
+                std::stringstream ss;
+                ss << " LIMIT " << limit;
+                sql += ss.str();
+            }
+
+            sql += ";";//这里不加好像也不会错
+            std::cerr << "fetchSelectSql:" << sql << std::endl;
+
+            if(0 != execSql(sql.c_str(), sql.length())){
+                std::cerr<<"execSql failed."<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            return colAllSize;//成功返回所有字段类型所占的大小
+        }
+
+       /* 支持连接查询，出错返回-1，成功返回传进col的所有字段类型所占的大小.*/
+        uint32_t fetchSelectSqlConn(const dbColConn *col, const aliasItem *tbName, const char *where, const char *groupBy, const char* having,
+            const char *order, uint32_t limit = 0, uint32_t limitFromNotZero = 0)
+        {
+            std::string sql;
+            sql += "SELECT ";
+
+            const dbColConn *tmp = col;
+            const aliasItem *tmpTb = tbName;
+            uint32_t colAllSize = 0;
+            bool first = true;
+            while (NULL != tmp->item.name)//遍历字段名
+            {
+                colAllSize += tmp->size;            //统计字段名的类型字节长度
+                if(::strlen(tmp->item.name) > 0){   //防止为空字符串,空字符串不做处理
+                    if(first){
+                        first = false;
+                    }else{
+                        sql += ", ";
+                    }
+                    ;
+                    if(tmp->item.alisa != ' '){
+                        sql += tmp->item.alisa;
+                        sql += ".";
+                    }
+                    sql += tmp->item.name;
+                }
+                tmp++;
+            }
+
+            first = true;
+            while(NULL != tmpTb->name)//遍历表名
+            {
+                if(::strlen(tmpTb->name) > 0){
+                    if(first){
+                        sql += " FROM ";
+                        first = false;
+                    }else{
+                        sql += ", ";
+                    }
+                    sql += tmpTb->name;
+                    sql += " ";
+                    sql += tmpTb->alisa;
+                }
+                tmpTb++;
+            }
+ 
+            if(NULL != where && ::strlen(where) > 0){
+                sql += " WHERE ";
+                sql += where;
+            }
+
+            //(where之后order之前)添加分组查询Group by和其对应的Having分组后的筛选。
+            if(NULL != groupBy && ::strlen(groupBy) > 0){
+                sql += " GROUP BY ";
+                sql += groupBy;
+            }
+
+            if(NULL != having && ::strlen(having) > 0){
+                sql += " HAVING ";
+                sql += having;
+            }
+
+            if(NULL != order && ::strlen(order) > 0){
+                sql += " ORDER BY ";
+                sql += order;
+            }
+
+            if(limitFromNotZero){//分页查询，开始下标不从0开始查询
+                std::stringstream ss;
+                ss << " LIMIT " << limitFromNotZero << "," << limit;
+                sql += ss.str();
+            }else if(limit){//分页查询，默认从0下标开始查询
+                std::stringstream ss;
+                ss << " LIMIT " << limit;
+                sql += ss.str();
+            }
+
+            sql += ";";//这里不加好像也不会错
+            std::cerr << "fetchSelectSql:" << sql << std::endl;
+
+            if(0 != execSql(sql.c_str(), sql.length())){
+                std::cerr<<"execSql failed."<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            return colAllSize;//成功返回所有字段类型所占的大小
+        }
+
+       /* 支持99连接查询，出错返回-1，成功返回传进col的所有字段类型所占的大小.*/
+        uint32_t fetchSelectSqlConn99(const dbColConn *col, const aliasItem99 *tbName, const char *where, const char *groupBy, const char* having,
+            const char *order, uint32_t limit = 0, uint32_t limitFromNotZero = 0)
+        {
+            std::string sql;
+            sql += "SELECT ";
+
+            const dbColConn *tmp = col;
+            const aliasItem99 *tmpTb = tbName;
+            uint32_t colAllSize = 0;
+            bool first = true;
+            while (NULL != tmp->item.name)//遍历字段名
+            {
+                colAllSize += tmp->size;            //统计字段名的类型字节长度
+                if(::strlen(tmp->item.name) > 0){   //防止为空字符串,空字符串不做处理
+                    if(first){
+                        first = false;
+                    }else{
+                        sql += ", ";
+                    }
+                    ;
+                    if(tmp->item.alisa != ' '){
+                        sql += tmp->item.alisa;
+                        sql += ".";
+                    }
+                    sql += tmp->item.name;
+                }
+                tmp++;
+            }
+
+            first = true;
+            while(NULL != tmpTb->name1 && NULL != tmpTb->name2)//遍历表名
+            {
+                if(::strlen(tmpTb->name1) > 0 && ::strlen(tmpTb->name2) > 0)
+                {
+                    if(first)
+                    {
+                        sql += " FROM ";
+                        sql += tmpTb->name1;
+                        sql += " ";
+                        if(NULL != tmpTb->alisa1){//是否加别名
+                            sql += tmpTb->alisa1;
+                            sql += " ";//防止connType不为空时与别名1重叠
+                        }
+                        if(NULL != tmpTb->connType){
+                            sql += tmpTb->connType;
+                        }else{
+                            // sql += "INNER";// 默认内连，该语句写不写作用一样
+                        }                       
+                        sql += " JOIN ";
+                        sql += tmpTb->name2;
+                        sql += " ";
+                        if(NULL != tmpTb->alisa2){
+                            sql += tmpTb->alisa2;
+                        } 
+                        sql += " ON ";
+                        if(NULL != tmpTb->on){
+                            sql += tmpTb->on;
+                        }
+                        first = false;
+                    }else
+                    {
+                        if(NULL != tmpTb->connType){
+                            sql += tmpTb->connType;
+                        }else{
+                            // sql += "INNER";// 默认内连，该语句写不写作用一样
+                        }                       
+                        sql += " JOIN ";
+                        sql += tmpTb->name2;
+                        sql += " ";
+                        if(NULL != tmpTb->alisa2){
+                            sql += tmpTb->alisa2;
+                        } 
+                        sql += " ON ";
+                        if(NULL != tmpTb->on){
+                            sql += tmpTb->on;
+                        }
+                    }
+                }
+                tmpTb++;
+            }
+ 
+            if(NULL != where && ::strlen(where) > 0){
+                sql += " WHERE ";
+                sql += where;
+            }
+
+            //(where之后order之前)添加分组查询Group by和其对应的Having分组后的筛选。
+            if(NULL != groupBy && ::strlen(groupBy) > 0){
+                sql += " GROUP BY ";
+                sql += groupBy;
+            }
+
+            if(NULL != having && ::strlen(having) > 0){
+                sql += " HAVING ";
+                sql += having;
             }
 
             if(NULL != order && ::strlen(order) > 0){
@@ -321,15 +545,176 @@ namespace MYSQLNAMESPACE
             return offset;//返回要选择的字段大小总和
         }
 
+        /*
+            获取一行的数据到tempData.
+            参12为数据与数据长度，参3为字段(主要用于遍历)，参4为要保存数据的内存.
+            成功返回要选择的字段大小总和，失败返回0。0可能是某个参数为空,或者offset为空即传进的size有误.
+        */
+        uint32_t fullSelectDataByRow(MYSQL_ROW row, unsigned long *lengths, const dbColConn *temp, unsigned char *tempData)
+        {
+            if(NULL == lengths || NULL == temp || NULL == tempData){
+                return (uint32_t)0;
+            }
+
+            int offset = 0;
+            int i = 0;
+            while (NULL != temp->item.name)
+            {
+                //传进的字段为空是select不出来的，所以必须过滤，组sql语句也需要过滤。当然也可以写在其它位置，但是这里最好
+                if(::strlen(temp->item.name) > 0)
+                {
+                    switch (temp->type)
+                    {
+                        case DB_DATA_TYPE::DB_CHAR:
+                        {
+                            if (row[i])//必须保证字段不为空才能使用，否则会程序崩溃
+                            {
+                                *(char *)(tempData + offset) = *row[i];
+                            }else
+                            {
+                                *(char *)(tempData + offset) = 0;//如果该字段为空，默认赋0，然后offset+=tmp->size
+                            }
+                            break;
+                        }
+                            
+                        case DB_DATA_TYPE::DB_UCHAR:
+                        {
+                            if(row[i])
+                            {
+                                *(unsigned char *)(tempData + offset) = *row[i];
+                            }else
+                            {
+                                *(unsigned char *)(tempData + offset) = 0;
+                            }
+                            break;
+                        }
+                            
+                        case DB_DATA_TYPE::DB_SHORT:
+                        {
+                            if(row[i])
+                            {
+                                //*(short *)(tempData + offset) = *row[i];//数值型不转无符号会出问题，数字对不上
+                                *(int16_t *)(tempData + offset) = ::strtoul(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(short *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                            
+                        case DB_DATA_TYPE::DB_USHORT:
+                        {
+                            if(row[i])
+                            {
+                                //*(unsigned short *)(tempData + offset) = *row[i];
+                                *(uint16_t *)(tempData + offset) = ::strtoul(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(unsigned short *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                        case DB_DATA_TYPE::DB_INT:
+                        {
+                            if(row[i])
+                            {
+                                //*(int *)(tempData + offset) = *row[i];
+                                *(int32_t *)(tempData + offset) = ::strtoul(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(int *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                        case DB_DATA_TYPE::DB_UINT:
+                        {
+                            if(row[i])
+                            {
+                                //*(unsigned int *)(tempData + offset) = *row[i];
+                                *(uint32_t *)(tempData + offset) = ::strtoul(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(unsigned int *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                        case DB_DATA_TYPE::DB_LONG:
+                        {
+                            if(row[i])
+                            {
+                                //*(long *)(tempData + offset) = *row[i];
+                                *(int64_t *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(long *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                        case DB_DATA_TYPE::DB_ULONG:
+                        {
+                            if(row[i])
+                            {
+                                //*(unsigned long *)(tempData + offset) = *row[i];
+                                *(uint64_t *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(unsigned long *)(tempData + offset) = 0;
+                            }
+                            break; 
+                        }
+                        case DB_DATA_TYPE::DB_STR:
+                        {
+                            //使用二进制的方式处理字符串,不要break即可
+                            // if(row[i]){
+                            //     bcopy(row[i], tempData + offset, temp->size);
+                            // }else
+                            // {
+                            //     bcopy(0x00, tempData + offset, temp->size);
+                            // }  
+                            // break;
+                        }                
+                        case DB_DATA_TYPE::DB_BIN:
+                        {
+                            bzero(tempData + offset, temp->size);
+                            if(row[i] && lengths[i]){
+                                //bcopy(row[i], tempData + offset, temp->size);
+                                //参3是防止当传进的struceTestData中的某个成员的字节数小于数据库的字节数时，造成内存越界发生数据混乱,严
+                                //重可能程序崩溃,所以当小于时，只能拷贝数据库的部分数据
+                                bcopy(row[i], tempData + offset, temp->size > lengths[i] ? lengths[i] : temp->size);
+                            }
+                            // else
+                            // {
+                            //     bcopy(0x00, tempData + offset, temp->size);
+                            // }  
+                            break;
+                        }
+                        
+                        default:
+                        {
+                            std::cerr<<__FUNCTION__<<": "<<__LINE__<<"sql type: "<<(int)temp->type<<" error"<<std::endl;
+                            break;
+                        }
+                    }//switch
+
+                    i++;//下一字段和其长度(row[i], lengths[i]),只有进入了if才i++，否则不需要,不然存在空name时会造成数据获取混乱
+                }   
+                
+                offset += temp->size;
+                temp++;
+            }
+
+            return offset;//返回要选择的字段大小总和
+        }
+
         /*成功：0代表查询结果为0，大于0代表查询行数.出错返回-1.*/
-        uint32_t execSelect(const dbCol *col, const char *tbName, const char *where, const char *order, unsigned char **data)
+        uint32_t execSelect(const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having, const char *order, unsigned char **data)
         {
             if(NULL == _mysql || NULL == col || NULL == tbName){
                 return (uint32_t)-1;
             }
 
             uint32_t retSize = 0;
-            retSize = fetchSelectSql(col, tbName, where, order);//返回所有字段所占的字节数大小
+            retSize = fetchSelectSql(col, tbName, where, groupBy, having, order);//返回所有字段所占的字节数大小
             if(retSize == (uint32_t)-1){
                 return (uint32_t)-1;
             }
@@ -376,8 +761,154 @@ namespace MYSQLNAMESPACE
             }
 
             mysql_free_result(store);
+
             return numRows;
         }
+
+        /* 支持连接查询和设置编码格式(有中文不设置会乱码)，成功：0代表查询结果为0，大于0代表查询行数.出错返回-1.*/
+        uint32_t execSelectConn(const dbColConn *col, const aliasItem *tbName, const char *where, const char *groupBy, const char* having, 
+            const char *order, unsigned char **data, const char *encode, bool isEncode=true)
+        {
+            if(NULL == _mysql || NULL == col || NULL == tbName){
+                return (uint32_t)-1;
+            }
+
+            // 为空，默认utf8 
+            if(!encode){
+                encode = "set names utf8";
+            }
+            // 默认设置该参数
+            if(isEncode){
+                if (mysql_query(_mysql, encode) != 0) {
+                    return (uint32_t)-1;
+                }
+            }
+
+            uint32_t retSize = 0;
+            retSize = fetchSelectSqlConn(col, tbName, where, groupBy, having, order);//返回所有字段所占的字节数大小
+            if(retSize == (uint32_t)-1){
+                return (uint32_t)-1;
+            }
+
+            MYSQL_RES *store = NULL;
+            store = mysql_store_result(_mysql);
+            if(NULL == store){
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"sql error"<<mysql_error(_mysql)<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            //mysql_num_rows() 返回结果集中行的数目。此命令仅对 SELECT 语句有效。要取得被 INSERT，UPDATE 或者 DELETE 查询所影
+            //响到的行的数目，用 mysql_affected_rows()。因为mysql_affected_rows() 函数返回前一次 MySQL 操作所影响的记录行数。
+            int numRows = 0;
+            numRows = mysql_num_rows(store);
+            if (0 == numRows)
+            {
+                mysql_free_result(store);
+                return 0;
+            }
+
+            *data = new unsigned char[numRows * retSize];//开辟行数与想要select的字段总长度
+            if (NULL == *data)
+            {
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"new error"<<std::endl;
+                mysql_free_result(store);
+                return (uint32_t)-1;
+            }
+
+            bzero(*data, numRows * retSize);
+
+            MYSQL_ROW row;
+			unsigned char *tempData = *data;
+            while (NULL != (row = mysql_fetch_row(store)))
+            {
+                unsigned long *lengths = mysql_fetch_lengths(store);//获取本行的长度,一个数组，里面包含每一个字段的长度
+                uint32_t fullSize = fullSelectDataByRow(row, lengths, col, tempData);
+                if (0 == fullSize)
+                {
+                    delete [] (*data);
+                    mysql_free_result(store);
+                    return (uint32_t)-1;
+                }
+                tempData += fullSize;
+            }
+
+            mysql_free_result(store);
+            
+            return numRows;
+        }
+
+        /* 支持99连接查询和设置编码格式(有中文不设置会乱码)，成功：0代表查询结果为0，大于0代表查询行数.出错返回-1. */
+        uint32_t execSelectConn99(const dbColConn *col, const aliasItem99 *tbName, const char *where, const char *groupBy, const char* having, 
+            const char *order, unsigned char **data, const char *encode, bool isEncode=true)
+        {
+            if(NULL == _mysql || NULL == col || NULL == tbName){
+                return (uint32_t)-1;
+            }
+
+            // 为空，默认utf8 
+            if(!encode){
+                encode = "set names utf8";
+            }
+            // 默认设置该参数
+            if(isEncode){
+                if (mysql_query(_mysql, encode) != 0) {
+                    return (uint32_t)-1;
+                }
+            }
+
+            uint32_t retSize = 0;
+            retSize = fetchSelectSqlConn99(col, tbName, where, groupBy, having, order);//返回所有字段所占的字节数大小
+            if(retSize == (uint32_t)-1){
+                return (uint32_t)-1;
+            }
+
+            MYSQL_RES *store = NULL;
+            store = mysql_store_result(_mysql);
+            if(NULL == store){
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"sql error"<<mysql_error(_mysql)<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            //mysql_num_rows() 返回结果集中行的数目。此命令仅对 SELECT 语句有效。要取得被 INSERT，UPDATE 或者 DELETE 查询所影
+            //响到的行的数目，用 mysql_affected_rows()。因为mysql_affected_rows() 函数返回前一次 MySQL 操作所影响的记录行数。
+            int numRows = 0;
+            numRows = mysql_num_rows(store);
+            if (0 == numRows)
+            {
+                mysql_free_result(store);
+                return 0;
+            }
+
+            *data = new unsigned char[numRows * retSize];//开辟行数与想要select的字段总长度
+            if (NULL == *data)
+            {
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"new error"<<std::endl;
+                mysql_free_result(store);
+                return (uint32_t)-1;
+            }
+
+            bzero(*data, numRows * retSize);
+
+            MYSQL_ROW row;
+			unsigned char *tempData = *data;
+            while (NULL != (row = mysql_fetch_row(store)))
+            {
+                unsigned long *lengths = mysql_fetch_lengths(store);//获取本行的长度,一个数组，里面包含每一个字段的长度
+                uint32_t fullSize = fullSelectDataByRow(row, lengths, col, tempData);
+                if (0 == fullSize)
+                {
+                    delete [] (*data);
+                    mysql_free_result(store);
+                    return (uint32_t)-1;
+                }
+                tempData += fullSize;
+            }
+
+            mysql_free_result(store);
+            
+            return numRows;
+        }
+
 
         /*
             成功返回查询到的行数，0代表查询行数为0. 失败返回-1.
@@ -385,8 +916,8 @@ namespace MYSQLNAMESPACE
                 者数据库中数据不足.但数据库中数据不足在test.cpp最后打印时，数值为0，字符串为空(memset为0，所以字符串遇到0会停止)，
                 所以这点不需要理会。
         */
-        uint32_t execSelectLimit(const dbCol *col, const char *tbName, const char *where, const char *order, 
-            unsigned char *data, uint32_t limit, uint32_t limitFromNotZero = 0)
+        uint32_t execSelectLimit(const dbCol *col, const char *tbName, const char *where,  const char *groupBy, const char* having,
+            const char *order, unsigned char *data, uint32_t limit, uint32_t limitFromNotZero = 0)
         {
 			uint32_t retError = (uint32_t)-1;
 
@@ -398,7 +929,7 @@ namespace MYSQLNAMESPACE
 
             //合并select语句并执行
             uint32_t retSize = 0;
-            retSize = fetchSelectSql(col, tbName, where, order, limit, limitFromNotZero);
+            retSize = fetchSelectSql(col, tbName, where, groupBy, having, order, limit, limitFromNotZero);
             if ((uint32_t)-1 == retSize)
             {
                 return retError;
@@ -416,7 +947,6 @@ namespace MYSQLNAMESPACE
                 //响到的行的数目，用 mysql_affected_rows()。因为mysql_affected_rows() 函数返回前一次 MySQL 操作所影响的记录行数。
                 uint32_t retCount = 0;
                 retCount = mysql_num_rows(store);
-                std::cout<<"retCOunt :"<<retCount<<std::endl;
                 if (0 == retCount)
                 {
                     mysql_free_result(store);
@@ -449,10 +979,10 @@ namespace MYSQLNAMESPACE
         }
 
         /*失败返回-1，成功返回插入成功的主键id*/
-        uint32_t execInsert(const char *tbName, const dbCol *col)
+        uint64_t execInsert(const char *tbName, const dbCol *col)
         {
             if(NULL == _mysql || NULL == tbName || NULL == col){
-                return (uint32_t)-1;
+                return (uint64_t)-1;
             }
 
             std::stringstream sql;
@@ -645,7 +1175,34 @@ namespace MYSQLNAMESPACE
             //但是需要注意，C中mysql_insert_id的返回值为int64_t，数据库返回的id最大为unsigned bigint，也是无符号64位。
             //但在PHP中mysql_insert_id的返回值为int,int实际在PHP由long存储，所以在64位机器中，
             //无符号的64位转成有符号的64位必然会导致溢出.但我们C/C++不需要担心溢出问题.
-            return (uint32_t)mysql_insert_id(_mysql);//这里64转32可能出现问题
+            return (uint64_t)mysql_insert_id(_mysql);//这里64转32可能出现问题(已修正)
+        }
+
+        /*
+            bulkFileds需为，例如：(id, name, sex)
+            bulkValue需为，例如：(1, 'xiaoming', '男')，或者多表时：(1, 'xiaoming', '男'),(2, 'xiaohong', '女'),(3, 'xiaohuang', '女')
+        */
+        uint64_t execInsert(const char *tbName, const char *bulkFileds, const char *bulkValues)
+        {
+            if(NULL == _mysql || NULL == tbName || NULL == bulkValues){
+                return (uint64_t)-1;
+            }
+
+            std::stringstream sql;
+            sql << "INSERT INTO ";
+            sql << tbName;
+            sql << bulkFileds;
+            sql << " VALUES";
+            sql << bulkValues;
+            sql << ";";
+            std::cout<<"sql :"<<sql.str()<<std::endl;
+
+            if(0 != execSql(sql.str().c_str(), sql.str().length()))
+            {
+                return (uint64_t)-1;
+            }
+
+            return (uint64_t)mysql_insert_id(_mysql);
         }
 
         /*成功返回update受影响的行数，失败返回-1.*/
@@ -1000,7 +1557,8 @@ namespace MYSQLNAMESPACE
     }
 
     /*成功：大于0代表查询行数,0代表查询结果为0.出错返回-1.*/
-    int DBPool::execSelect(uint32_t id, const dbCol *col, const char *tbName, const char *where, const char *order, unsigned char **data)
+    int DBPool::execSelect(uint32_t id, const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having,
+            const char *order, unsigned char **data)
     {
         if(NULL == col || NULL == tbName){//无法组成最基本的select语句直接返回
             return -1;
@@ -1011,13 +1569,47 @@ namespace MYSQLNAMESPACE
             std::cerr<<"conn is null."<<std::endl;
             return -1;
         }else{
-            return conn->execSelect(col, tbName, where, order, data);
+            return conn->execSelect(col, tbName, where, groupBy, having, order, data);
         }
     }
 
+    /* 支持连接查询，并且可以添加设置字符集，成功：大于0代表查询行数,0代表查询结果为0.出错返回-1. */
+    int DBPool::execSelectConn(uint32_t id, const dbColConn *col, const aliasItem *tbName, const char *where,  const char *groupBy, const char* having,
+        const char *order, unsigned char **data, const char *encode, bool isEncode)
+    {
+        if(NULL == col || NULL == tbName){//无法组成最基本的select语句直接返回
+            return -1;
+        }
+
+        auto conn = getConnById(id);
+        if(NULL == conn){
+            std::cerr<<"conn is null."<<std::endl;
+            return -1;
+        }else{
+            return conn->execSelectConn(col, tbName, where, groupBy, having, order, data, encode, isEncode);
+        }
+    }
+
+    /* 支持99连接查询，并且可以添加设置字符集，成功：大于0代表查询行数,0代表查询结果为0.出错返回-1. */
+    int DBPool::execSelectConn99(uint32_t id, const dbColConn *col, const aliasItem99 *tbName, const char *where,  const char *groupBy, const char* having,
+            const char *order, unsigned char **data, const char *encode, bool isEncode)
+    {
+        if(NULL == col || NULL == tbName){//无法组成最基本的select语句直接返回
+            return -1;
+        }
+
+        auto conn = getConnById(id);
+        if(NULL == conn){
+            std::cerr<<"conn is null."<<std::endl;
+            return -1;
+        }else{
+            return conn->execSelectConn99(col, tbName, where, groupBy, having, order, data, encode, isEncode);
+        }   
+    }
+
     /*成功返回查询到的行数，失败返回-1，0代表查询行数为0.与ConnDB::execSelectLimit一样*/
-    uint32_t DBPool::execSelectLimit(uint32_t id, const dbCol *col, const char *tbName, 
-        const char *where, const char *order, uint32_t limit, unsigned char *data, uint32_t limitFrom)
+    uint32_t DBPool::execSelectLimit(uint32_t id, const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having,
+        const char *order, uint32_t limit, unsigned char *data, uint32_t limitFrom)
     {
         if(NULL == col || NULL == tbName){//无法组成最基本的select语句直接返回
             return -1;
@@ -1029,14 +1621,14 @@ namespace MYSQLNAMESPACE
             return -1;
         }
             
-        return conn->execSelectLimit(col, tbName, where, order, data, limit, limitFrom);
+        return conn->execSelectLimit(col, tbName, where, groupBy, having, order, data, limit, limitFrom);
     }
 
     /*成功返回插入成功的主键id行,失败返回-1.*/
-    uint32_t DBPool::execInsert(uint32_t id, const char *tbName, const dbCol *col)
+    uint64_t DBPool::execInsert(uint32_t id, const char *tbName, const dbCol *col)
     {
         if(NULL == tbName || NULL == col){
-            return (uint32_t)-1;
+            return (uint64_t)-1;
         }
         auto conn = getConnById(id);
         if(NULL == conn){
@@ -1045,6 +1637,21 @@ namespace MYSQLNAMESPACE
         }
 
         return conn->execInsert(tbName, col);
+    }
+
+    /* 支持批量查询，成功返回插入成功的主键id行,失败返回-1. */
+    uint64_t DBPool::execInsert(uint32_t id, const char *tbName, const char * bulkFileds, const char *bulkValue)
+    {
+        if(NULL == tbName || NULL == bulkFileds || NULL == bulkValue){
+            return (uint64_t)-1;
+        }
+        auto conn = getConnById(id);
+        if(NULL == conn){
+            std::cerr<<"conn is null in execInsert."<<std::endl;
+            return -1;
+        }
+
+        return conn->execInsert(tbName, bulkFileds, bulkValue);
     }
 
     /*成功返回受影响的行数，失败返回-1*/
@@ -1129,5 +1736,11 @@ namespace MYSQLNAMESPACE
 		}
 		ret->releaseConn();
 	}
+
+    void DBPool::setConnInfo(DBConnInfo &connInfo)
+    {
+        m_connInfo = connInfo;
+    }
+
 }
 

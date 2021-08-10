@@ -55,7 +55,7 @@ void* SelectFunc(void *arg)
 	retCount = dbPool->execSelectLimit(id, column, "USERINFO", NULL, NULL, SELECT_COUNT, (unsigned char *)data);
 #else
     testDataStruct *data = NULL;
-    retCount = dbPool->execSelect(id, column, "USERINFO", NULL, NULL, (unsigned char**)&data);
+    retCount = dbPool->execSelect(id, column, "USERINFO", NULL, NULL, NULL, NULL , (unsigned char**)&data);
 #endif
     if(retCount == (uint32_t)-1)
     {
@@ -290,7 +290,7 @@ void* SelectFunc1(void *arg)
 	retCount = dbPool->execSelectLimit(id, column, "USERINFO", NULL, NULL, SELECT_COUNT, (unsigned char *)data);
 #else
     testDataStruct1 *data = NULL;
-    retCount = dbPool->execSelect(id, column, "vg_ms_push_info", NULL, NULL, (unsigned char**)&data);
+    retCount = dbPool->execSelect(id, column, "vg_ms_push_info", NULL, NULL, NULL, NULL, (unsigned char**)&data);
 #endif
     if(retCount == (uint32_t)-1)
     {

@@ -79,4 +79,33 @@ struct testDataStruct2
 	unsigned char transmit_type;
 } __attribute__ ((packed));
 
+//<==test.cpp end==>
+
+struct testfenzu
+{
+    int count;
+    int dep_id;
+} __attribute__ ((packed));
+
+struct testConn
+{
+    long count;                 // 注意32位的long是4字节。test中的字节数也需要对应改成4.
+    char city[30];
+} __attribute__ ((packed));
+
+struct testNeiLian
+{
+    long count;                 // 注意32位的long是4字节。test中的字节数也需要对应改成4.
+    char city[30];
+} __attribute__ ((packed));
+
+struct testWaiLian
+{
+    long beatyId;                 // 注意32位的long是4字节。test中的字节数也需要对应改成4.
+    char beatyName[50];
+    long boysId;
+    char boysName[20];
+    long boysuserCP;
+} __attribute__ ((packed));
+
 #endif
