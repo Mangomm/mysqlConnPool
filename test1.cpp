@@ -271,6 +271,162 @@ void* SelectFunc3(void *arg)
 	return NULL;
 }
 
+/**
+ * 测试子查询(这里以标量子查询为案例)：
+ * 1）案例：返回job_id与141号员工相同，salary比143号员工多的员工 姓名，job_id 和工资。
+ * sql语句：
+ *  SELECT last_name,job_id,salary
+    FROM employees
+    WHERE job_id = (
+        SELECT job_id
+        FROM employees
+        WHERE employee_id = 141
+    ) AND salary>(
+        SELECT salary
+        FROM employees
+        WHERE employee_id = 143
+    );
+    注：dbColConn的传入，可以在navicat先执行上面的语句看具体的结果类型及其大小，这样更好。或者看主查询SELECT后面想要查询的字段。
+*/
+void* SelectFunc4(void *arg)
+{
+    //分离线程，让系统回收线程结束后的资源
+    pthread_detach(pthread_self());
+
+    if(NULL == arg){
+        std::cout<<"DBPool SelectFunc is null！！！"<<std::endl;
+        return NULL;
+    }
+
+    MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
+    int id = dbPool->getConn();
+    
+    MYSQLNAMESPACE::dbColConn dbcol1[] = {
+        {{' ',"last_name"},                     DB_DATA_TYPE::DB_STR,           25,     NULL},//不能加别名的传空字符即可
+        {{' ', "job_id"},                       DB_DATA_TYPE::DB_STR,           10,     NULL},
+        {{' ', "salary"},                       DB_DATA_TYPE::DB_DOUBLE,        8,      NULL},//数据库是10字节，这里是8字节，可能数据丢失，不过一般不会超过double
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+    };
+    testSubQuery *data = NULL;
+    std::string sql = "SELECT last_name,job_id,salary \
+    FROM employees \
+    WHERE job_id = ( \
+        SELECT job_id \
+        FROM employees \
+        WHERE employee_id = 141 \
+    ) AND salary>( \
+        SELECT salary \
+        FROM employees \
+        WHERE employee_id = 143 \
+    );";
+
+    uint32_t retCount = 0;
+    retCount = dbPool->execSelectSubQuery(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    if(retCount == (uint32_t)-1)
+    {
+        std::cout<<"Select error"<<std::endl;
+        sleep(2);
+        dbPool->releaseConn(id);
+        return NULL;
+    }
+    else
+    {
+        for (uint32_t i = 0; i < retCount; ++i)
+		{
+			std::cout << "last_name: " << data[i].last_name << "   job_id: " << data[i].job_id << "   salary: " << data[i].salary << std::endl;
+		}
+        if(NULL != data){
+            delete [] data;
+            data = NULL;
+        }
+    }
+
+    std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
+    sleep(2);
+	dbPool->releaseConn(id);
+
+	return NULL;
+}
+
+/**
+ * 测试联合查询(能用普通查询就尽量别用联合查询)：
+ * 1）案例：查询部门编号>90或邮箱包含a的员工信息。
+ * sql语句：
+ *  SELECT * FROM employees  WHERE email LIKE '%a%'
+    UNION
+    SELECT * FROM employees  WHERE department_id>90;
+    实际上上面就是以下两个sql语句的合并：
+    1）SELECT * FROM employees  WHERE email LIKE '%a%';
+    2）SELECT * FROM employees  WHERE department_id>90;
+    由于联合查询要求：1）多条查询语句的查询列数是一致的，2）且要求多条查询语句的查询的每一列的类型和顺序最好一致；
+    所以SELECT后面的字段一般都要求相同。例如这里的 "*" 号。
+
+    正常语句的实现：SELECT * FROM employees WHERE email LIKE '%a%' OR department_id>90;
+    可以看到，正常语句比联合查询简单，故建议优先使用。
+*/
+void* SelectFunc5(void *arg)
+{
+    //分离线程，让系统回收线程结束后的资源
+    pthread_detach(pthread_self());
+
+    if(NULL == arg){
+        std::cout<<"DBPool SelectFunc is null！！！"<<std::endl;
+        return NULL;
+    }
+
+    MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
+    int id = dbPool->getConn();
+    
+    MYSQLNAMESPACE::dbColConn dbcol1[] = {
+        {{' ',"employee_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},//不能加别名的传空字符即可
+        {{' ', "first_name"},                   DB_DATA_TYPE::DB_STR,           20,     NULL},
+        {{' ', "last_name"},                    DB_DATA_TYPE::DB_STR,           25,     NULL},
+        {{' ', "email"},                        DB_DATA_TYPE::DB_STR,           25,     NULL},
+        {{' ', "phone_number"},                 DB_DATA_TYPE::DB_STR,           20,     NULL},
+        {{' ', "job_id"},                       DB_DATA_TYPE::DB_STR,           10,     NULL},
+        {{' ', "salary"},                       DB_DATA_TYPE::DB_DOUBLE,        8,      NULL},
+        {{' ', "commission_pct"},               DB_DATA_TYPE::DB_FLOAT,         4,      NULL},
+        {{' ', "manager_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},
+        {{' ', "department_id"},                DB_DATA_TYPE::DB_INT,           4,      NULL},
+        {{' ', "hiredate"},                     DB_DATA_TYPE::DB_STR,           40,     NULL},//数据库的datetime类型，这里使用字符串40字节处理，够使用了
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+    };
+    testUnion *data = NULL;
+    std::string sql = "SELECT * FROM employees  WHERE email LIKE '%a%' \
+    UNION \
+    SELECT * FROM employees  WHERE department_id>90;";
+
+    uint32_t retCount = 0;
+    retCount = dbPool->execSelectSubQuery(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    if(retCount == (uint32_t)-1)
+    {
+        std::cout<<"Select error"<<std::endl;
+        sleep(2);
+        dbPool->releaseConn(id);
+        return NULL;
+    }
+    else
+    {
+        for (uint32_t i = 0; i < retCount; ++i)
+		{
+			std::cout << "employee_id: " << data[i].employee_id << "   first_name: " << data[i].first_name << "   last_name: " << data[i].last_name
+            << "   email: " << data[i].email << "   phone_number: " << data[i].phone_number << "   job_id: " << data[i].job_id 
+            << "   salary: " << data[i].salary << "   commission_pct: " << data[i].commission_pct << "   manager_id: " << data[i].manager_id 
+            << "   department_id: " << data[i].department_id << "   hiredate: " << data[i].hiredate << std::endl;
+		}
+        if(NULL != data){
+            delete [] data;
+            data = NULL;
+        }
+    }
+
+    std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
+    sleep(2);
+	dbPool->releaseConn(id);
+
+	return NULL;
+}
+
 int main(){
 
     MYSQLNAMESPACE::DBPool::DBConnInfo connInfo;
@@ -290,7 +446,9 @@ int main(){
     {
         // pthread_create(&tid1, NULL, SelectFunc1, (void*)&dbPool);
         // pthread_create(&tid2, NULL, SelectFunc2, (void*)&dbPool);
-        pthread_create(&tid2, NULL, SelectFunc3, (void*)&dbPool);
+        // pthread_create(&tid2, NULL, SelectFunc3, (void*)&dbPool);
+        // pthread_create(&tid2, NULL, SelectFunc4, (void*)&dbPool);
+        pthread_create(&tid2, NULL, SelectFunc5, (void*)&dbPool);
         sleep(10000);//使用usleep时，按下ctrl+c会报出段错误，用sleep不会
     }
 

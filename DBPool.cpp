@@ -384,6 +384,27 @@ namespace MYSQLNAMESPACE
             return colAllSize;//成功返回所有字段类型所占的大小
         }
 
+       /* 支持子查询，出错返回-1，成功返回传进col的所有字段类型所占的大小.*/
+        uint32_t fetchSelectSqlSubQuery(const char *sql, const dbColConn *col)
+        {
+            const dbColConn *tmp = col;
+            uint32_t colAllSize = 0;
+
+            while(NULL != tmp->item.name){// 统计所有字段所占的字节数大小
+                colAllSize += tmp->size;
+                tmp++;
+            }
+            std::cerr << "fetchSelectSql:" << sql << std::endl;
+
+            if(0 != execSql(sql, ::strlen(sql))){
+                std::cerr<<"execSql failed."<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            return colAllSize;//成功返回所有字段类型所占的大小
+        }
+
+
         /*
             获取一行的数据到tempData.
             参12为数据与数据长度，参3为字段(主要用于遍历)，参4为要保存数据的内存.
@@ -500,6 +521,28 @@ namespace MYSQLNAMESPACE
                                 *(unsigned long *)(tempData + offset) = 0;
                             }
                             break; 
+                        }
+                        case DB_DATA_TYPE::DB_FLOAT:
+                        {
+                            if(row[i])
+                            {
+                                *(float *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(float *)(tempData + offset) = 0;
+                            }
+                            break;                             
+                        }
+                        case DB_DATA_TYPE::DB_DOUBLE:
+                        {
+                            if(row[i])
+                            {
+                                *(double *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(double *)(tempData + offset) = 0;
+                            }
+                            break;                             
                         }
                         case DB_DATA_TYPE::DB_STR:
                         {
@@ -661,6 +704,28 @@ namespace MYSQLNAMESPACE
                                 *(unsigned long *)(tempData + offset) = 0;
                             }
                             break; 
+                        }
+                        case DB_DATA_TYPE::DB_FLOAT:
+                        {
+                            if(row[i])
+                            {
+                                *(float *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(float *)(tempData + offset) = 0;
+                            }
+                            break;                             
+                        }
+                        case DB_DATA_TYPE::DB_DOUBLE:
+                        {
+                            if(row[i])
+                            {
+                                *(double *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                            }else
+                            {
+                                *(double *)(tempData + offset) = 0;
+                            }
+                            break;                             
                         }
                         case DB_DATA_TYPE::DB_STR:
                         {
@@ -858,6 +923,77 @@ namespace MYSQLNAMESPACE
 
             uint32_t retSize = 0;
             retSize = fetchSelectSqlConn99(col, tbName, where, groupBy, having, order);//返回所有字段所占的字节数大小
+            if(retSize == (uint32_t)-1){
+                return (uint32_t)-1;
+            }
+
+            MYSQL_RES *store = NULL;
+            store = mysql_store_result(_mysql);
+            if(NULL == store){
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"sql error"<<mysql_error(_mysql)<<std::endl;
+                return (uint32_t)-1;
+            }
+
+            //mysql_num_rows() 返回结果集中行的数目。此命令仅对 SELECT 语句有效。要取得被 INSERT，UPDATE 或者 DELETE 查询所影
+            //响到的行的数目，用 mysql_affected_rows()。因为mysql_affected_rows() 函数返回前一次 MySQL 操作所影响的记录行数。
+            int numRows = 0;
+            numRows = mysql_num_rows(store);
+            if (0 == numRows)
+            {
+                mysql_free_result(store);
+                return 0;
+            }
+
+            *data = new unsigned char[numRows * retSize];//开辟行数与想要select的字段总长度
+            if (NULL == *data)
+            {
+                std::cerr<<__FUNCTION__<<": "<<__LINE__<<"new error"<<std::endl;
+                mysql_free_result(store);
+                return (uint32_t)-1;
+            }
+
+            bzero(*data, numRows * retSize);
+
+            MYSQL_ROW row;
+			unsigned char *tempData = *data;
+            while (NULL != (row = mysql_fetch_row(store)))
+            {
+                unsigned long *lengths = mysql_fetch_lengths(store);//获取本行的长度,一个数组，里面包含每一个字段的长度
+                uint32_t fullSize = fullSelectDataByRow(row, lengths, col, tempData);
+                if (0 == fullSize)
+                {
+                    delete [] (*data);
+                    mysql_free_result(store);
+                    return (uint32_t)-1;
+                }
+                tempData += fullSize;
+            }
+
+            mysql_free_result(store);
+            
+            return numRows;
+        }
+
+        /* 支持子查询和设置编码格式(有中文不设置会乱码)，成功：0代表查询结果为0，大于0代表查询行数.出错返回-1. */
+        uint32_t execSelectSubQuery(const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode)
+        {
+            if(NULL == _mysql || NULL == col){
+                return (uint32_t)-1;
+            }
+
+            // 为空，默认utf8 
+            if(!encode){
+                encode = "set names utf8";
+            }
+            // 默认设置该参数
+            if(isEncode){
+                if (mysql_query(_mysql, encode) != 0) {
+                    return (uint32_t)-1;
+                }
+            }
+
+            uint32_t retSize = 0;
+            retSize = fetchSelectSqlSubQuery(sql, col);//返回所有字段所占字节大小
             if(retSize == (uint32_t)-1){
                 return (uint32_t)-1;
             }
@@ -1114,7 +1250,30 @@ namespace MYSQLNAMESPACE
                                 }
                             }
                             break; 
-
+                        case DB_DATA_TYPE::DB_FLOAT :
+                            {
+                                if(NULL != tmp->data)
+                                {
+                                    //std::cout<<"tmp->data :"<<tmp->data<<std::endl;
+                                    float f = *(float*)(tmp->data);
+                                    sql << f;
+                                }else{
+                                    //sql << 0;
+                                }
+                            }
+                            break; 
+                        case DB_DATA_TYPE::DB_DOUBLE :
+                            {
+                                if(NULL != tmp->data)
+                                {
+                                    //std::cout<<"tmp->data :"<<tmp->data<<std::endl;
+                                    double d = *(double*)(tmp->data);
+                                    sql << d;
+                                }else{
+                                    //sql << 0;
+                                }
+                            }
+                            break; 
                        case DB_DATA_TYPE::DB_STR :
                             {
                                 if(NULL != tmp->data)
@@ -1320,8 +1479,29 @@ namespace MYSQLNAMESPACE
                             }
                         }
                         break;
-
-                      case DB_DATA_TYPE::DB_STR :
+                        case DB_DATA_TYPE::DB_FLOAT :
+                        {
+                            if(NULL != tmp->data)
+                            {
+                                float f = *((float *)tmp->data);
+                                sql << tmp->name;
+                                sql << "=";
+                                sql << f;
+                            }
+                        }
+                        break;
+                        case DB_DATA_TYPE::DB_DOUBLE :
+                        {
+                            if(NULL != tmp->data)
+                            {
+                                double d = *((double *)tmp->data);
+                                sql << tmp->name;
+                                sql << "=";
+                                sql << d;
+                            }
+                        }
+                        break;
+                        case DB_DATA_TYPE::DB_STR :
                         {
                             if(NULL != tmp->data)
                             {
@@ -1604,6 +1784,22 @@ namespace MYSQLNAMESPACE
             return -1;
         }else{
             return conn->execSelectConn99(col, tbName, where, groupBy, having, order, data, encode, isEncode);
+        }   
+    }
+
+    /* 支持子查询，并且可以添加设置字符集，成功：大于0代表查询行数,0代表查询结果为0.出错返回-1. */
+    int DBPool::execSelectSubQuery(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode)
+    {
+        if(NULL == sql){//无法组成最基本的select语句直接返回
+            return -1;
+        }
+
+        auto conn = getConnById(id);
+        if(NULL == conn){
+            std::cerr<<"conn is null."<<std::endl;
+            return -1;
+        }else{
+            return conn->execSelectSubQuery(sql, col, data, encode, isEncode);
         }   
     }
 

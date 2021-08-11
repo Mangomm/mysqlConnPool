@@ -21,6 +21,8 @@ namespace MYSQLNAMESPACE{
         DB_UINT,
         DB_LONG,
         DB_ULONG,
+        DB_FLOAT,
+        DB_DOUBLE,
         DB_STR,
         DB_BIN,
         //add new type before DB_INVALID
@@ -97,6 +99,9 @@ class DBPool
         //支持分组查询Group by和Having分组后的筛选，并且支持99的所有连接查询(内连外连交叉连)，和支持多表连接
         int execSelectConn99(uint32_t id, const dbColConn *col, const aliasItem99 *tbName, const char *where,  const char *groupBy, const char* having,
             const char *order, unsigned char **data, const char *encode, bool isEncode = true);
+        //支持子查询，col里面的item.name,type,size是必传的。貌似所有查询都支持，若不支持，建议上面的分组、连接查询都按照这种方式设计，这样无需再考虑合并sql语句。函数名暂时不修改。
+        int execSelectSubQuery(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
+
         void releaseConn(int connId);
 
         /*仅支持单条插入，多条插入需要循环*/

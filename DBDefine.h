@@ -108,4 +108,30 @@ struct testWaiLian
     long boysuserCP;
 } __attribute__ ((packed));
 
+struct testSubQuery
+{
+    char last_name[25];
+    char job_id[10];
+    double salary;
+} __attribute__ ((packed));
+
+struct testUnion
+{
+	long employee_id;
+	char first_name[20];
+	char last_name[25];
+    char email[25];
+
+	char phone_number[20];
+	char job_id[10];
+	double salary;
+	float commission_pct;
+    // double commission_pct;
+    // int commission_pct;
+
+	long manager_id;
+	int department_id;
+	char hiredate[40];
+} __attribute__ ((packed));
+
 #endif
