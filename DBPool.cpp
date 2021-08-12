@@ -592,6 +592,13 @@ namespace MYSQLNAMESPACE
             获取一行的数据到tempData.
             参12为数据与数据长度，参3为字段(主要用于遍历)，参4为要保存数据的内存.
             成功返回要选择的字段大小总和，失败返回0。0可能是某个参数为空,或者offset为空即传进的size有误.
+            
+            注，下面的合并数据库数据的函数(fullSelectDataByRow)： 
+            1）当类型是CHAR+UCHAR或者是数值型(short~double)时，若值为0，可能代表数据库的值是null或者是真的0。
+            2）strtoul与strtoull是一样的，都是将传入的字符串参1转成对应的进制，只不过一个是unsigned long返回，一个是unsigned long long返回，
+            所以short、unsigned short、int、unsigned int这些使用都没问题，不存在访问越界的问题，因为都是通过传入的参1字符串进行处理，只是强转的问题而已，但是至少需要保证
+            返回值大于要保存的值，例如要转的字符串大于long，但是你的返回值类型仍用long，那么就会返回时出现数据丢失，所以此时对一个已经数据丢失的数据(即返回值)进行强转还是数据丢失。
+            3）float、double存在小数的不能使用整数的方法转，否则遇到小数点即非法字符后，函数返回，例如1.3，则返回1，0.3则返回0。
         */
         uint32_t fullSelectDataByRow(MYSQL_ROW row, unsigned long *lengths, const dbColConn *temp, unsigned char *tempData)
         {
@@ -601,6 +608,7 @@ namespace MYSQLNAMESPACE
 
             int offset = 0;
             int i = 0;
+            
             while (NULL != temp->item.name)
             {
                 //传进的字段为空是select不出来的，所以必须过滤，组sql语句也需要过滤。当然也可以写在其它位置，但是这里最好
@@ -709,7 +717,9 @@ namespace MYSQLNAMESPACE
                         {
                             if(row[i])
                             {
-                                *(float *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                                // float、double存在小数的不能使用整数的方法转，否则遇到小数点即非法字符后，函数返回，例如1.3，则返回1，0.3则返回0。
+                                // *(float *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                                *(float *)(tempData + offset) = ::strtof(row[i], (char **)NULL);
                             }else
                             {
                                 *(float *)(tempData + offset) = 0;
@@ -720,7 +730,7 @@ namespace MYSQLNAMESPACE
                         {
                             if(row[i])
                             {
-                                *(double *)(tempData + offset) = ::strtoull(row[i], (char **)NULL, 10);
+                                *(double *)(tempData + offset) = ::strtold(row[i], (char **)NULL);
                             }else
                             {
                                 *(double *)(tempData + offset) = 0;
