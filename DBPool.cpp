@@ -29,6 +29,7 @@ namespace MYSQLNAMESPACE
 
         ~DBConn()
         {
+            std::cout<<"test auto recycling"<<std::endl;
             fini();
         }
 

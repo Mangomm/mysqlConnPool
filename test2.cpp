@@ -67,7 +67,8 @@ int main(){
     while (!bExit)
     {
         pthread_create(&tid1, NULL, UpdateFunc1, (void*)&dbPool);
-        sleep(10000);//使用usleep时，按下ctrl+c会报出段错误，用sleep不会
+        sleep(10);//使用usleep时，按下ctrl+c会报出段错误，用sleep不会
+        break;
     }
 
     return 0;

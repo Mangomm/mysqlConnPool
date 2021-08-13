@@ -82,7 +82,8 @@ class DBPool
         DBPool():m_MAX_CONN_COUNT(50){}
         /* 默认最大连接池的个数为50 */
         DBPool(DBConnInfo connInfo) : m_connInfo(connInfo), m_MAX_CONN_COUNT(50){};
-        ~DBPool(){};
+        ~DBPool(){};//注意：由于我们m_connPool连接容器的second是使用shared_ptr，所以当程序结束时，能自动调用
+                    //DBConn的析构，从而调用fini();回收掉连接。所以这里DBPool的析构无需处理任何东西。
 
     public:
         int getConn();
