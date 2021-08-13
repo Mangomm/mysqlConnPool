@@ -111,6 +111,9 @@ class DBPool
 
         /*目前只支持单表更新,不支持多表的连接更新*/
         uint32_t execUpdate(uint32_t id, const char *tbName, const dbCol *col, const char *where);
+        /* 支持所有的更新，貌似对于不用获取数据的，也是通用的。例如插入。只需要传sql语句。 */
+        uint32_t execUpdate(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
+
         /*目前只支持单表的删除，不支持多表的连接删除*/
         uint32_t execDelete(uint32_t id, const char *tbName, const char *where);
 

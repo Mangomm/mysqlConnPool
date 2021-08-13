@@ -300,7 +300,7 @@ namespace MYSQLNAMESPACE
                         sql += " FROM ";
                         sql += tmpTb->name1;
                         sql += " ";
-                        if(NULL != tmpTb->alisa1){//是否加别名
+                        if(NULL != tmpTb->alisa1){//是否加别名，别名这里最好不判断也行
                             sql += tmpTb->alisa1;
                             sql += " ";//防止connType不为空时与别名1重叠
                         }
@@ -1569,6 +1569,33 @@ namespace MYSQLNAMESPACE
             return mysql_affected_rows(_mysql);
         }
 
+        /*通用的Update，成功返回update受影响的行数，失败返回-1.*/
+        uint32_t execUpdate(const char *sql, const char *encode, bool isEncode)
+        {
+            if(NULL == _mysql || NULL == sql){
+                return (uint32_t)-1;
+            }
+
+            // 为空，默认utf8 
+            if(!encode){
+                encode = "set names utf8";
+            }
+            // 默认设置该参数
+            if(isEncode){
+                if (mysql_query(_mysql, encode) != 0) {
+                    return (uint32_t)-1;
+                }
+            }
+
+            // std::cout<<"update sql :"<<sql<<std::endl;
+            if(0 != execSql(sql, ::strlen(sql)))
+            {
+                return -1;
+            }
+
+            return mysql_affected_rows(_mysql);
+        }
+
         /*成功返回受影响的行数，失败返回-1*/
         uint32_t execDelete(const char *tbName, const char *where)
         {
@@ -1875,6 +1902,23 @@ namespace MYSQLNAMESPACE
 
         return conn->execUpdate(tbName, col, where);
     }
+
+    /*成功返回受影响的行数，失败返回-1*/
+    uint32_t DBPool::execUpdate(uint32_t id, const char *sql, const char *encode, bool isEncode)
+    {
+        if(NULL == sql){
+            return (uint32_t)-1;
+        }
+
+        auto conn = getConnById(id);
+        if(NULL == conn){
+            std::cerr<<"conn is null in execUpdate."<<std::endl;
+            return -1;
+        }
+
+        return conn->execUpdate(sql, encode, isEncode);
+    }
+
 
     /*成功返回受影响的行数，失败返回-1*/
     uint32_t DBPool::execDelete(uint32_t id, const char *tbName, const char *where)
