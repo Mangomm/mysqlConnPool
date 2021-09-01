@@ -1297,7 +1297,11 @@ namespace MYSQLNAMESPACE
                                         // mysql_real_escape_string(_mysql, strData, (const char*&)tmp->data, tmp->size);
                                         sql << "NULL" ;
                                     }else{
-                                        char strData[2 * tmp->size + 1] = {0};
+                                        unsigned long len = 2 * tmp->size + 1;
+                                        //char strData[len] = {0}; // 不能同时变长与初始化
+                                        char strData[len];
+                                        memset(strData, 0x00, len);
+
                                         //若传进的tmp->data字符串长度大于tmp->size，会造成数据丢失.并且dbCol的size不能大于数据库的长度，否则插入会越界，可用mysql_error查看错误.
                                         mysql_real_escape_string(_mysql, strData, (const char*&)tmp->data, tmp->size);
                                         //std::cout<<"strData :"<<strData<<std::endl;//出现多个\0，是因为mysql_real_escape_string会进行相关转义，添加相应的转义字符
@@ -1312,7 +1316,10 @@ namespace MYSQLNAMESPACE
                             {
                                 if(NULL != tmp->data)
                                 {
-									char strData[2 * tmp->size + 1] = {0};
+                                    unsigned long len = 2 * tmp->size + 1;
+                                    char strData[len];
+                                    memset(strData, 0x00, len);
+
 									mysql_real_escape_string(_mysql, strData, (const char*&)tmp->data, tmp->size);
                                     std::cout<<"strData :"<<strData<<std::endl;//出现多个\0，是因为mysql_real_escape_string会进行相关转义，添加相应的转义字符
 									sql << "\'" << strData << "\'";
@@ -1517,7 +1524,9 @@ namespace MYSQLNAMESPACE
                             if(NULL != tmp->data)
                             {
                                 unsigned long len = 2 * tmp->size + 1;
-                                char strData[len] = {0};
+                                char strData[len];
+                                memset(strData, 0x00, len);
+
                                 //mysql_escape_string(strData, (const char *)tmp->data, len);//error
                                 mysql_escape_string(strData, (const char *)tmp->data, tmp->size);//若传进的tmp->data太大，则最大只会转义tmp->size个内容。
                                 sql << tmp->name;
@@ -1531,7 +1540,9 @@ namespace MYSQLNAMESPACE
                             if(NULL != tmp->data)
                             {
                                 unsigned long len = 2 * tmp->size + 1;
-                                char strData[len] = {0};
+                                char strData[len];
+                                memset(strData, 0x00, len);
+                                
                                 mysql_escape_string(strData, (const char *)tmp->data, tmp->size);//若传进的tmp->data太大，则最大只会转义tmp->size个内容。
                                 sql << tmp->name;
                                 sql << "=";
@@ -1994,4 +2005,3 @@ namespace MYSQLNAMESPACE
     }
 
 }
-
