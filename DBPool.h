@@ -88,35 +88,19 @@ class DBPool
     public:
         int getConn();
 
-        //支持分组查询Group by和Having分组后的筛选
-        int execSelect(uint32_t id, const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having,
-            const char *order, unsigned char **data);
-        //支持分组查询Group by和Having分组后的筛选
-        uint32_t execSelectLimit(uint32_t id, const dbCol *col, const char *tbName, const char *where, const char *groupBy, const char* having,
-            const char *order, uint32_t limit, unsigned char *data, uint32_t limitFrom = 0);
-        //支持分组查询Group by和Having分组后的筛选，并且支持92的所有连接查询(实际92仅支持内连)
-        int execSelectConn(uint32_t id, const dbColConn *col, const aliasItem *tbName, const char *where,  const char *groupBy, const char* having,
-            const char *order, unsigned char **data, const char *encode, bool isEncode = true);
-        //支持分组查询Group by和Having分组后的筛选，并且支持99的所有连接查询(内连外连交叉连)，和支持多表连接
-        int execSelectConn99(uint32_t id, const dbColConn *col, const aliasItem99 *tbName, const char *where,  const char *groupBy, const char* having,
-            const char *order, unsigned char **data, const char *encode, bool isEncode = true);
-        //支持子查询，col里面的item.name,type,size是必传的。貌似所有查询都支持，若不支持，建议上面的分组、连接查询都按照这种方式设计，这样无需再考虑合并sql语句。函数名暂时不修改。
-        int execSelectSubQuery(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
+        /*支持分组查询(Group by,having)，连接查询(92,99语法都支持)，子查询等多种查询。*/
+        uint32_t execSelect(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
 
         void releaseConn(int connId);
 
-        /*仅支持单条插入，多条插入需要循环*/
-        uint64_t execInsert(uint32_t id, const char *tbName, const dbCol *col);
-        /*支持批量插入*/
-        uint64_t execInsert(uint32_t id, const char *tbName, const char *bulkFileds, const char *bulkValue);
+        /*支持单条、批量插入*/
+        uint32_t execInsert(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
 
-        /*目前只支持单表更新,不支持多表的连接更新*/
-        uint32_t execUpdate(uint32_t id, const char *tbName, const dbCol *col, const char *where);
-        /* 支持所有的更新，貌似对于不用获取数据的，也是通用的。例如插入。只需要传sql语句。 */
+        /* 支持所有的更新，貌似对于不用获取数据的，也是通用的。例如插入。只需要传sql语句，但是有合并插入、更新、删除的必要吗，个人觉得看使用者，我这里就不合并了。 */
         uint32_t execUpdate(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
 
-        /*目前只支持单表的删除，不支持多表的连接删除*/
-        uint32_t execDelete(uint32_t id, const char *tbName, const char *where);
+        /*支持单表的删除(已测试)，多表的连接删除(多表的连接删除看test.cpp的测试，而且需求也不多，遇到的时候大家再搞一下即可)*/
+        uint32_t execDelete(uint32_t id, const char *sql);
 
         //显示事务的相关函数
         bool setTransactions(uint32_t id, bool bSupportTransactions);//设置该连接为显示事务

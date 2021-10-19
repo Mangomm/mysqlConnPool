@@ -37,11 +37,11 @@ void* SelectFunc1(void *arg)
     int id = dbPool->getConn();
     
     // 这里的COUNT(*)至少需要比数据库的类型大，因为不知道数据库对COUNT函数返回的结果集取什么，我们最好去无符号的64位，防止数据丢失，这里取了int，32位4字节
-    const dbCol column[] = 
+    const dbColConn column[] = 
 	{
-		{"COUNT(*) count",  DB_DATA_TYPE::DB_INT,       4, NULL},       
-		{"department_id",   DB_DATA_TYPE::DB_INT,       4, NULL},
-		{NULL ,             DB_DATA_TYPE::DB_INVALID,   0, NULL}
+		{{' ', "COUNT(*) count"},  DB_DATA_TYPE::DB_INT,       4, NULL},       
+		{{' ', "department_id"},   DB_DATA_TYPE::DB_INT,       4, NULL},
+		{{' ', NULL},              DB_DATA_TYPE::DB_INVALID,   0, NULL}
 	};
 
     uint32_t retCount = 0;
@@ -49,20 +49,13 @@ void* SelectFunc1(void *arg)
 #define SELECT_LIMIT
 #ifdef SELECT_LIMIT
 #define SELECT_COUNT 2
-	testfenzu data[SELECT_COUNT];
-	memset(data, 0x00, sizeof(data));
-	//retCount = dbPool->execSelectLimit(id, column, "employees", NULL, "department_id", "COUNT(*)>5", NULL, SELECT_COUNT, (unsigned char *)data);
-    /*//可以增加where和order by，但需要注意where不能使用分组后的结果集的字段，因为where后跟原表字段，而order by可以跟结果集的内容
-    //例如：SELECT COUNT(*) count, department_id FROM employees WHERE department_id>30 GROUP BY department_id HAVING COUNT(*)>5 ORDER BY count DESC LIMIT 2;
-    */
-    retCount = dbPool->execSelectLimit(id, column, "employees", "department_id>30", "department_id", "COUNT(*)>5", "count DESC", SELECT_COUNT, (unsigned char *)data);
+	testfenzu *data = NULL;
+    std::string sql = "SELECT COUNT(*) count, department_id FROM employees WHERE department_id>30 GROUP BY department_id HAVING COUNT(*)>5 ORDER BY count DESC LIMIT 2";
+    retCount = dbPool->execSelect(id, sql.c_str(), column, (unsigned char **)&data, NULL);
 #else
     testfenzu *data = NULL;
-    retCount = dbPool->execSelect(id, column, "employees", NULL, "department_id", "COUNT(*)>5", NULL, (unsigned char**)&data);
-    /*//可以增加where和order by，但需要注意where不能使用分组后的结果集的字段，因为where后跟原表字段，而order by可以跟结果集的内容
-    //例如：SELECT COUNT(*) count, department_id FROM employees WHERE department_id>30 GROUP BY department_id HAVING COUNT(*)>5 ORDER BY count DESC;
-    //retCount = dbPool->execSelect(id, column, "employees", "department_id>30", "department_id", "COUNT(*)>5", "count DESC", (unsigned char**)&data);
-    */
+    std::string sql = "SELECT COUNT(*) count, department_id FROM employees WHERE department_id>30 GROUP BY department_id HAVING COUNT(*)>5 ORDER BY count DESC";
+    retCount = dbPool->execSelect(id, sql.c_str(), column, (unsigned char**)&data, NULL);
 #endif
     if(retCount == (uint32_t)-1)
     {
@@ -71,7 +64,7 @@ void* SelectFunc1(void *arg)
     else
     {
 #ifdef SELECT_LIMIT
-		for (uint32_t i = 0; i < SELECT_COUNT; ++i)
+		for (uint32_t i = 0; i < retCount; ++i)
 		{
 			std::cout << "count: " << data[i].count << std::endl;
 			std::cout << "dep_id: " << data[i].dep_id << std::endl;
@@ -82,14 +75,14 @@ void* SelectFunc1(void *arg)
 			std::cout << "count: " << data[i].count << std::endl;
 			std::cout << "dep_id: " << data[i].dep_id << std::endl;
 		}
-        if(NULL != data){
-            delete [] data;
-            data = NULL;
-        }
 #endif
     }
 
-    std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
+    if(NULL != data){
+        delete [] data;
+        data = NULL;
+    }
+    std::cout<<"tid: "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
 	dbPool->releaseConn(id);
 
@@ -97,7 +90,7 @@ void* SelectFunc1(void *arg)
 }
 
 /**
- * 测试sql92的连接查询(92仅支持内连)：
+ * 测试sql92的连接查询(92语法仅支持内连)：
  * 1. 测试内连：
  *  #案例：查询每个城市的部门个数
  *  sql语句：SELECT COUNT(*) count,l.city FROM departments d,locations l WHERE d.`location_id`=l.`location_id` GROUP BY city;
@@ -116,25 +109,17 @@ void* SelectFunc2(void *arg)
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
     int id = dbPool->getConn();
     
+
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
-        {{' ',"COUNT(*) count"},                DB_DATA_TYPE::DB_LONG,          8,      NULL},//不能加别名的传空字符即可
-        {{'l', "city"},                         DB_DATA_TYPE::DB_STR,           30,     NULL},
-        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+        {{' ',"count"},                         DB_DATA_TYPE::DB_LONG,          8,      NULL},
+        {{' ', "city"},                         DB_DATA_TYPE::DB_STR,           30,     NULL},
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}
     };
     
-    //此时aliasItem的name代表表名
-    std::string t1 = "departments";
-    std::string t2 = "locations";
-    MYSQLNAMESPACE::aliasItem tbList1[] = {
-        {'d', t1.c_str()},
-        {'l', t2.c_str()},
-        {'0', NULL}
-    };
-    std::string where1 = "d.`location_id`=l.`location_id`";
     testConn *data = NULL;
-
     uint32_t retCount = 0;
-    retCount = dbPool->execSelectConn(id, dbcol1, tbList1, where1.c_str(), "city", NULL, NULL, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    std::string sql = "SELECT COUNT(*) count,l.city FROM departments d,locations l WHERE d.`location_id`=l.`location_id` GROUP BY city;";
+    retCount = dbPool->execSelect(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
     if(retCount == (uint32_t)-1)
     {
         std::cout<<"Select error"<<std::endl;
@@ -149,12 +134,12 @@ void* SelectFunc2(void *arg)
 			std::cout << "count: " << data[i].count << std::endl;
 			std::cout << "city: " << data[i].city << std::endl;
 		}
-        if(NULL != data){
-            delete [] data;
-            data = NULL;
-        }
     }
 
+    if(NULL != data){
+        delete [] data;
+        data = NULL;
+    }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
 	dbPool->releaseConn(id);
@@ -194,41 +179,32 @@ void* SelectFunc3(void *arg)
     uint32_t retCount = 0;
     
     // 1 内连
-#define type 0
+#define type 1
 #if type == 0
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
-        {{' ',"COUNT(*) count"},                DB_DATA_TYPE::DB_LONG,          8,      NULL},//不能加别名的传空字符即可
-        {{'l', "city"},                         DB_DATA_TYPE::DB_STR,           30,     NULL},
-        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+        {{' ',"count"},                         DB_DATA_TYPE::DB_LONG,          8,      NULL},
+        {{' ', "city"},                         DB_DATA_TYPE::DB_STR,           30,     NULL},
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}
     };
-    std::string t1 = "departments";
-    std::string t2 = "locations";
-    MYSQLNAMESPACE::aliasItem99 tbList1[] = {
-        {'d',   t1.c_str(),     'l',    t2.c_str(),     NULL,   "d.`location_id`=l.`location_id`"},
-        {' ',   NULL,           ' ',    NULL,           NULL,   NULL}//结尾标志
-    };
+    std::string sql1 = "SELECT COUNT(*) count, l.city FROM departments d INNER JOIN locations l ON d.`location_id`=l.`location_id` GROUP BY city;";
+
     testNeiLian *data = NULL;
-    retCount = dbPool->execSelectConn99(id, dbcol1, tbList1, NULL, "city", NULL, NULL, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    retCount = dbPool->execSelect(id, sql1.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
 
 #elif type == 1
     // 2 外连
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
-        {{'b', "id"},                           DB_DATA_TYPE::DB_LONG,          8,      NULL},//注意一下这里，数据库是11字节的int，这里只用8字节去接，可能会丢失数据。
-        {{'b', "name"},                         DB_DATA_TYPE::DB_STR,           50,     NULL},
-        {{'o', "id"},                           DB_DATA_TYPE::DB_LONG,          8,      NULL},//注意，由于别名只有一个字节，所以不能写成两个字符的bo。
-        {{'o', "boyName"},                      DB_DATA_TYPE::DB_STR,           20,     NULL},
-        {{'o', "userCP"},                       DB_DATA_TYPE::DB_LONG,          8,      NULL},
-        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+        {{' ', "id"},                           DB_DATA_TYPE::DB_LONG,          8,      NULL},//注意一下这里，数据库是11字节的int，这里只用8字节去接，可能会丢失数据。
+        {{' ', "name"},                         DB_DATA_TYPE::DB_STR,           50,     NULL},
+        {{' ', "id"},                           DB_DATA_TYPE::DB_LONG,          8,      NULL},
+        {{' ', "boyName"},                      DB_DATA_TYPE::DB_STR,           20,     NULL},
+        {{' ', "userCP"},                       DB_DATA_TYPE::DB_LONG,          8,      NULL},
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}
     };
-    std::string t1 = "beauty";
-    std::string t2 = "boys";
-    MYSQLNAMESPACE::aliasItem99 tbList1[] = {
-        {'b',   t1.c_str(),     'o',    t2.c_str(),     "LEFT OUTER",   "b.`boyfriend_id` = o.`id`"},
-        {' ',   NULL,           ' ',    NULL,           NULL,   NULL}//结尾标志
-    };
+    std::string sql2 = "SELECT b.id, b.name, bo.* FROM beauty b LEFT OUTER JOIN boys bo ON b.`boyfriend_id` = bo.`id` WHERE b.`id`>3;";
+
     testWaiLian *data = NULL;
-    std::string where1 = "b.`id`>3";
-    retCount = dbPool->execSelectConn99(id, dbcol1, tbList1, where1.c_str(), NULL, NULL, NULL, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    retCount = dbPool->execSelect(id, sql2.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
 #else
     // 3 交叉连
     交叉连接很简单，这里就不写了，注意：由于*是没有类型的，所以只能列出两表的所有字段，自己也可以想想如何优化适配。
@@ -258,12 +234,12 @@ void* SelectFunc3(void *arg)
             std::cout << "交叉连接" << std::endl;
 #endif
 		}
-        if(NULL != data){
-            delete [] data;
-            data = NULL;
-        }
     }
 
+    if(NULL != data){
+        delete [] data;
+        data = NULL;
+    }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
 	dbPool->releaseConn(id);
@@ -275,7 +251,7 @@ void* SelectFunc3(void *arg)
  * 测试子查询(这里以标量子查询为案例)：
  * 1）案例：返回job_id与141号员工相同，salary比143号员工多的员工 姓名，job_id 和工资。
  * sql语句：
- *  SELECT last_name,job_id,salary
+    SELECT last_name,job_id,salary
     FROM employees
     WHERE job_id = (
         SELECT job_id
@@ -302,10 +278,10 @@ void* SelectFunc4(void *arg)
     int id = dbPool->getConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
-        {{' ',"last_name"},                     DB_DATA_TYPE::DB_STR,           25,     NULL},//不能加别名的传空字符即可
+        {{' ',"last_name"},                     DB_DATA_TYPE::DB_STR,           25,     NULL},
         {{' ', "job_id"},                       DB_DATA_TYPE::DB_STR,           10,     NULL},
         {{' ', "salary"},                       DB_DATA_TYPE::DB_DOUBLE,        8,      NULL},//数据库是10字节，这里是8字节，可能数据丢失，不过一般不会超过double
-        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}
     };
     testSubQuery *data = NULL;
     std::string sql = "SELECT last_name,job_id,salary \
@@ -321,7 +297,7 @@ void* SelectFunc4(void *arg)
     );";
 
     uint32_t retCount = 0;
-    retCount = dbPool->execSelectSubQuery(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    retCount = dbPool->execSelect(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
     if(retCount == (uint32_t)-1)
     {
         std::cout<<"Select error"<<std::endl;
@@ -335,12 +311,12 @@ void* SelectFunc4(void *arg)
 		{
 			std::cout << "last_name: " << data[i].last_name << "   job_id: " << data[i].job_id << "   salary: " << data[i].salary << std::endl;
 		}
-        if(NULL != data){
-            delete [] data;
-            data = NULL;
-        }
     }
 
+    if(NULL != data){
+        delete [] data;
+        data = NULL;
+    }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
 	dbPool->releaseConn(id);
@@ -352,7 +328,7 @@ void* SelectFunc4(void *arg)
  * 测试联合查询(能用普通查询就尽量别用联合查询)：
  * 1）案例：查询部门编号>90或邮箱包含a的员工信息。
  * sql语句：
- *  SELECT * FROM employees  WHERE email LIKE '%a%'
+    SELECT * FROM employees  WHERE email LIKE '%a%'
     UNION
     SELECT * FROM employees  WHERE department_id>90;
     实际上上面就是以下两个sql语句的合并：
@@ -378,7 +354,7 @@ void* SelectFunc5(void *arg)
     int id = dbPool->getConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
-        {{' ',"employee_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},//不能加别名的传空字符即可
+        {{' ',"employee_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},
         {{' ', "first_name"},                   DB_DATA_TYPE::DB_STR,           20,     NULL},
         {{' ', "last_name"},                    DB_DATA_TYPE::DB_STR,           25,     NULL},
         {{' ', "email"},                        DB_DATA_TYPE::DB_STR,           25,     NULL},
@@ -389,7 +365,7 @@ void* SelectFunc5(void *arg)
         {{' ', "manager_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},
         {{' ', "department_id"},                DB_DATA_TYPE::DB_INT,           4,      NULL},
         {{' ', "hiredate"},                     DB_DATA_TYPE::DB_STR,           40,     NULL},//数据库的datetime类型，这里使用字符串40字节处理，够使用了
-        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}//name为NULL时，alias无作用，故可以任意
+        {{'0', NULL},                           DB_DATA_TYPE::DB_INVALID,       0,      NULL}
     };
     testUnion *data = NULL;
     std::string sql = "SELECT * FROM employees  WHERE email LIKE '%a%' \
@@ -397,7 +373,7 @@ void* SelectFunc5(void *arg)
     SELECT * FROM employees  WHERE department_id>90;";
 
     uint32_t retCount = 0;
-    retCount = dbPool->execSelectSubQuery(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
+    retCount = dbPool->execSelect(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
     if(retCount == (uint32_t)-1)
     {
         std::cout<<"Select error"<<std::endl;
@@ -414,12 +390,12 @@ void* SelectFunc5(void *arg)
             << "   salary: " << data[i].salary << "   commission_pct: " << data[i].commission_pct << "   manager_id: " << data[i].manager_id 
             << "   department_id: " << data[i].department_id << "   hiredate: " << data[i].hiredate << std::endl;
 		}
-        if(NULL != data){
-            delete [] data;
-            data = NULL;
-        }
     }
 
+    if(NULL != data){
+        delete [] data;
+        data = NULL;
+    }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
 	dbPool->releaseConn(id);
@@ -430,11 +406,11 @@ void* SelectFunc5(void *arg)
 int main(){
 
     MYSQLNAMESPACE::DBPool::DBConnInfo connInfo;
-    connInfo.dbName = "myemployees";//SelectFunc2
-    // connInfo.dbName = "girls";//SelectFunc3
-    connInfo.host = "192.168.1.185";
-    connInfo.passwd = "123456";
-    connInfo.port = 3306;
+    connInfo.dbName = "myemployees";    //SelectFunc1、2、3
+    // connInfo.dbName = "girls";       //SelectFunc3
+    connInfo.host = "127.0.0.1";
+    connInfo.passwd = "6E6Zl4cy0z5phqjL";
+    connInfo.port = 3872;
     connInfo.user = "root";
     DBPool dbPool(connInfo);
 
