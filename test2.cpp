@@ -30,9 +30,9 @@ void* UpdateFunc1(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
-    std::string sql = "UPDATE departments SET department_name='Ttt', location_id='2500' WHERE department_id=280;";
+    std::string sql = "UPDATE departments SET department_name='Ttt', location_id='2500' WHERE department_id=270;";
 
     uint32_t retCount = 0;
     retCount = dbPool->execUpdate(id, sql.c_str(), NULL, true);
@@ -40,26 +40,32 @@ void* UpdateFunc1(void *arg)
     {
         std::cout<<"execUpdate error"<<std::endl;
         sleep(2);
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return NULL;
     }
 
     std::cout<<"tid= "<<pthread_self()<<" execUpdate success."<<" affected rows: "<<retCount<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
 
 int main(){
 
-    MYSQLNAMESPACE::DBPool::DBConnInfo connInfo;
+    MYSQLNAMESPACE::DBConnInfo connInfo;
     connInfo.dbName = "myemployees";//SelectFunc2
-    connInfo.host = "192.168.1.185";
+    connInfo.host = "127.0.0.1";
     connInfo.passwd = "123456";
     connInfo.port = 3306;
     connInfo.user = "root";
     DBPool dbPool(connInfo);
+
+    auto ret = dbPool.DbCreate(10, 20);
+    if(!ret){
+        printf("DbCreate failed.\n");
+        return -1;
+    }
 
     signal(SIGINT, signal_ctrlc);
     pthread_t tid1;

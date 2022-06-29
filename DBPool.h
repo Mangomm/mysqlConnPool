@@ -1,12 +1,18 @@
-#ifndef __OVF__DBPOOL__H__
-#define __OVF__DBPOOL__H__
+#ifndef __DBPOOL__H__
+#define __DBPOOL__H__
 
 #include <iostream>
 #include <stdint.h>
 #include <map>
 #include <memory>
+#include <atomic>
+#include <mysql/mysql.h>
 
 #include "MyLock.h"
+#include "MyTime.h"
+
+// 是否对连接池进行debug
+#define _DEBUG_CONN_POOL
 
 namespace MYSQLNAMESPACE{
 
@@ -52,46 +58,106 @@ namespace MYSQLNAMESPACE{
         uint32_t size;			// 数据库字段的类型的大小
         unsigned char *data;	// 填入的数据，select用不到，一般是insert,update使用
     } dbColConn;
-    //用于99连接查询时，方便在字段前添加对应别名，并且需要添加ON条件，和支持多表连接
-    typedef struct 
-    {
-        char alisa1;             // 表的别名1
-        const char *name1;       // 表名1
-        char alisa2;             // 表的别名2
-        const char *name2;       // 表名2
-        const char *connType;    // 连接类型
-        const char *on;          // join on中，on的条件
-    }aliasItem99;
 
-class DBConn;
+    struct DBConnInfo
+    {
+        std::string host;	
+        std::string user;
+        std::string passwd;
+        std::string dbName;
+        int port;
+        bool supportTransactions;
+    };
+
+class DBPool;
+class DBConn
+{
+public:
+
+    /*连接状态*/
+    enum CONN_STATUS
+    {
+        CONN_INVALID,       /*非法*/
+        CONN_USING,         /*正在使用*/
+        CONN_VALID,         /*合法，等待被使用*/
+    };
+
+public:
+    DBConn(const DBConnInfo connInfo) :
+        _mysql(NULL), _connInfo(connInfo), _timeout(15), _connStatus(CONN_INVALID), _myId(-1),  _threadId(0){}
+    ~DBConn()    
+    {
+#ifdef _DEBUG_CONN_POOL
+        std::cout<<"test auto recycling"<<std::endl;
+#endif
+        fini();
+    }
+
+    bool init();
+    void fini();
+
+    void setStatus(CONN_STATUS connStatus);
+    CONN_STATUS getStatus();
+    int getMyId();
+    time_t getElapse();
+    void getConn();
+    void releaseConn();
+    
+public: 
+    int execSql(const char *sql, uint32_t sqlLen);
+    uint32_t fetchSelectSql(const char *sql, const dbColConn *col);
+    uint32_t fullSelectDataByRow(MYSQL_ROW row, unsigned long *lengths, const dbCol *temp, unsigned char *tempData);
+    uint32_t fullSelectDataByRow(MYSQL_ROW row, unsigned long *lengths, const dbColConn *temp, unsigned char *tempData);
+    uint32_t execSelect(const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode);
+    uint32_t execInsert(const char *sql, const char *encode, bool isEncode);
+    uint32_t execUpdate(const char *sql, const char *encode, bool isEncode);
+    uint32_t execDelete(const char *sql);
+    bool setTransactions(bool bSupportTransactions);
+    
+private:
+    bool connDB();
+
+private:
+    static int _connId;			    //连接的总次数，作为map的key使用.后续建议使用时间戳代替
+
+    MYSQL *_mysql;					//用于定义一个mysql对象,便于后续操作确定要操作的数据库是哪一个
+    DBConnInfo _connInfo;	        //连接信息
+    const int _timeout;             //数据库的读写超时时长限制
+
+    CONN_STATUS _connStatus;		//连接状态
+    int _myId;						//连接的id，即所有连接数的一个序号
+
+    pthread_t _threadId;            //使用该连接的线程id
+    MyTime _myTime;                 //用于记录连接被使用的开始时间和使用时长
+};
+
+//class DBConn;
 class DBPool
 {
     public:
-        struct DBConnInfo
-        {
-            std::string host;	
-            std::string user;
-            std::string passwd;
-            std::string dbName;
-            int port;
-            bool supportTransactions;
-        };
 
     public:
         /* 默认构造函数 */
-        DBPool():m_MAX_CONN_COUNT(50){}
+        DBPool(){}
         /* 默认最大连接池的个数为50 */
-        DBPool(DBConnInfo connInfo) : m_connInfo(connInfo), m_MAX_CONN_COUNT(50){};
-        ~DBPool(){};//注意：由于我们m_connPool连接容器的second是使用shared_ptr，所以当程序结束时，能自动调用
+        DBPool(DBConnInfo connInfo) : 
+            _connInfo(connInfo), _shutdown(false), 
+            _minConnNum(0), _maxConnNum(0), _liveConnNum(0), _busyConnNum(0){}
+        ~DBPool(){}//注意：由于我们m_connPool连接容器的second是使用shared_ptr，所以当程序结束时，能自动调用
                     //DBConn的析构，从而调用fini();回收掉连接。所以这里DBPool的析构无需处理任何东西。
 
     public:
-        int getConn();
+        // 动态接口
+        bool DbCreate(int minConnNum, int maxConnNum);
+        int DbGetConn();
+        void DbReleaseConn(int connId);
 
+        int DbDestroy();
+        int DbAdjustThread();// 禁止手动调用
+
+    public:
         /*支持分组查询(Group by,having)，连接查询(92,99语法都支持)，子查询等多种查询。*/
         uint32_t execSelect(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
-
-        void releaseConn(int connId);
 
         /*支持单条、批量插入*/
         uint32_t execInsert(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
@@ -114,12 +180,19 @@ class DBPool
         std::shared_ptr<DBConn> getConnById(uint32_t id);
 
     private:
-        using MysqlConn = std::map<int, std::shared_ptr<DBConn>>;
-        MysqlConn  m_connPool;                                      /*存放多个连接的容器*/
-        DBConnInfo m_connInfo;                                      /*连接信息*/
+        //using MysqlConn = std::map<int, std::shared_ptr<DBConn>>;
+        std::map<int, std::shared_ptr<DBConn>>  _connPool;          /*存放多个连接的容器*/
+        DBConnInfo _connInfo;                                       /*连接信息*/
 
-        MyLock m_lock;                                              /*用于锁住连接池*/
-        const uint32_t m_MAX_CONN_COUNT;                            /*最大连接数*/
+        MyLock _lock;                                               /*用于锁住连接池*/
+
+        pthread_t _adjust;                                          /* 调整线程 */
+        int _shutdown;                                              /* 标志位，连接池使用状态，true代表将要关闭连接池，false代表不关 */
+        
+        std::atomic<int> _minConnNum;                               /* 最小连接数 */
+        std::atomic<int> _maxConnNum;                               /* 最大连接数 */
+        std::atomic<int> _liveConnNum;                              /* 当前存活连接个数 */
+        std::atomic<int> _busyConnNum;                              /* 忙状态连接个数 */
 
 };
 

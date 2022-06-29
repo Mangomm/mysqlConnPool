@@ -34,7 +34,7 @@ void* SelectFunc1(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
     // 这里的COUNT(*)至少需要比数据库的类型大，因为不知道数据库对COUNT函数返回的结果集取什么，我们最好去无符号的64位，防止数据丢失，这里取了int，32位4字节
     const dbColConn column[] = 
@@ -84,7 +84,7 @@ void* SelectFunc1(void *arg)
     }
     std::cout<<"tid: "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
@@ -107,7 +107,7 @@ void* SelectFunc2(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
 
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
@@ -124,7 +124,7 @@ void* SelectFunc2(void *arg)
     {
         std::cout<<"Select error"<<std::endl;
         sleep(2);
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return NULL;
     }
     else
@@ -142,7 +142,7 @@ void* SelectFunc2(void *arg)
     }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
@@ -175,7 +175,7 @@ void* SelectFunc3(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     uint32_t retCount = 0;
     
     // 1 内连
@@ -214,7 +214,7 @@ void* SelectFunc3(void *arg)
     {
         std::cout<<"Select error"<<std::endl;
         sleep(2);
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return NULL;
     }
     else
@@ -242,7 +242,7 @@ void* SelectFunc3(void *arg)
     }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
@@ -275,7 +275,7 @@ void* SelectFunc4(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
         {{' ',"last_name"},                     DB_DATA_TYPE::DB_STR,           25,     NULL},
@@ -302,7 +302,7 @@ void* SelectFunc4(void *arg)
     {
         std::cout<<"Select error"<<std::endl;
         sleep(2);
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return NULL;
     }
     else
@@ -319,7 +319,7 @@ void* SelectFunc4(void *arg)
     }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
@@ -351,7 +351,7 @@ void* SelectFunc5(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
         {{' ',"employee_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},
@@ -372,13 +372,14 @@ void* SelectFunc5(void *arg)
     UNION \
     SELECT * FROM employees  WHERE department_id>90;";
 
+    std::cout<<"sql: "<<sql<<std::endl;
     uint32_t retCount = 0;
     retCount = dbPool->execSelect(id, sql.c_str(), dbcol1, reinterpret_cast<unsigned char**>(&data), NULL, true);
     if(retCount == (uint32_t)-1)
     {
         std::cout<<"Select error"<<std::endl;
         sleep(2);
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return NULL;
     }
     else
@@ -398,21 +399,27 @@ void* SelectFunc5(void *arg)
     }
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
 
 int main(){
 
-    MYSQLNAMESPACE::DBPool::DBConnInfo connInfo;
+    MYSQLNAMESPACE::DBConnInfo connInfo;
     connInfo.dbName = "myemployees";    //SelectFunc1、2、3
     // connInfo.dbName = "girls";       //SelectFunc3
     connInfo.host = "127.0.0.1";
-    connInfo.passwd = "6E6Zl4cy0z5phqjL";
-    connInfo.port = 3872;
+    connInfo.passwd = "123456";
+    connInfo.port = 3306;
     connInfo.user = "root";
     DBPool dbPool(connInfo);
+
+    auto ret = dbPool.DbCreate(10, 20);
+    if(!ret){
+        printf("DbCreate failed.\n");
+        return -1;
+    }
 
     signal(SIGINT, signal_ctrlc);
     pthread_t tid1;

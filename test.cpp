@@ -26,7 +26,7 @@ void* SelectFunc(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->getConn();
+    int id = dbPool->DbGetConn();
     
     /*
         select注意点：
@@ -93,7 +93,7 @@ void* SelectFunc(void *arg)
 
     std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
     sleep(2);
-	dbPool->releaseConn(id);
+	dbPool->DbReleaseConn(id);
 
 	return NULL;
 }
@@ -110,7 +110,7 @@ void* InsertFunc(void *arg)
     }
 
     auto dbPool = (DBPool*)arg;
-    auto id = dbPool->getConn();
+    auto id = dbPool->DbGetConn();
 
     //1. 单条插入
     //"INSERT INTO USERINFO(USERID, MYNAME, ISOK) VALUES('229', '马超', '1');"
@@ -118,7 +118,7 @@ void* InsertFunc(void *arg)
     sql1 << "INSERT INTO USERINFO(USERID, MYNAME, ISOK) VALUES('229', '马超', '1');";
     if(dbPool->execInsert(id, sql1.str().c_str(), NULL) == (uint32_t)-1){
         std::cout<<"tid= "<<pthread_self()<<" insert failed."<<std::endl;
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return (void*)-1;//退出之前必须使连接变为空闲可用
     }
 
@@ -128,13 +128,13 @@ void* InsertFunc(void *arg)
     sql2 << "INSERT INTO USERINFO(USERID, MYNAME, ISOK) VALUES('230', '黄忠', '1'),('231', '关羽', '1'),('232', '赵云', '1');";
     if(dbPool->execInsert(id, sql2.str().c_str(), NULL) == (uint32_t)-1){
         std::cout<<"tid= "<<pthread_self()<<" insert failed."<<std::endl;
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return (void*)-1;//退出之前必须使连接变为空闲可用
     }
 
     std::cout<<"tid= "<<pthread_self()<<" insert success."<<std::endl;
     sleep(2);
-    dbPool->releaseConn(id);
+    dbPool->DbReleaseConn(id);
     
     return NULL;
 }
@@ -151,14 +151,14 @@ void* updateFunc(void *arg)
     }
 
     auto dbPool = (DBPool*)arg;
-    auto id = dbPool->getConn();
+    auto id = dbPool->DbGetConn();
 
     //1. 更新单表的单条语句
     std::string sql1 = "UPDATE USERINFO SET MYNAME='瑶', ISOK='1' WHERE id=1;";
     auto ret = dbPool->execUpdate(id, sql1.c_str(), NULL);
     std::cout<<"mysql_affected_rows: "<<ret<<std::endl;
     if(ret == (uint32_t)-1){
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return (void*)-1;
     }
 
@@ -202,7 +202,7 @@ void* updateFunc(void *arg)
     ret = dbPool->execUpdate(id, sql2.c_str(), NULL);
     std::cout<<"mysql_affected_rows: "<<ret<<std::endl;
     if(ret == (uint32_t)-1){
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return (void*)-1;
     }
 
@@ -221,13 +221,13 @@ void* updateFunc(void *arg)
     // auto ret = dbPool->execUpdate(id, sql3.c_str(), NULL);
     // std::cout<<"mysql_affected_rows: "<<ret<<std::endl;
     // if(ret == (uint32_t)-1){
-    //     dbPool->releaseConn(id);
+    //     dbPool->DbReleaseConn(id);
     //     return (void*)-1;
     // }
 
     std::cout<<"update success"<<std::endl;
     sleep(2);
-    dbPool->releaseConn(id);
+    dbPool->DbReleaseConn(id);
     
     return NULL;
 }
@@ -249,7 +249,7 @@ void* deleteFunc(void *arg)
     */
 
     auto dbPool = (DBPool*)arg;
-    auto id = dbPool->getConn();
+    auto id = dbPool->DbGetConn();
 
     /*
         1.单表的删除。
@@ -261,7 +261,7 @@ void* deleteFunc(void *arg)
     // std::cout<<"mysql_affected_rows: "<<ret<<std::endl;
     // if((uint32_t)-1 == ret){
     //     std::cout<<"execDelete failed."<<std::endl;
-    //     dbPool->releaseConn(id);
+    //     dbPool->DbReleaseConn(id);
     //     return (void*)-1;
     // }
 
@@ -275,31 +275,38 @@ void* deleteFunc(void *arg)
             INNER JOIN boys bo ON b.`boyfriend_id` = bo.`id`
             WHERE bo.`boyName`='张无忌';
     */
-    std::string sql2 = "DELETE b FROM beauty b INNER JOIN boys bo ON b.`boyfriend_id` = bo.`id` WHERE bo.`boyName`='张无忌'";
+    std::string sql2 = "DELETE b FROM beauty b INNER JOIN boys bo ON b.`boyfriend_id` = bo.`id` WHERE bo.`boyName`='张无忌';";
     auto ret = dbPool->execDelete(id, sql2.c_str());
     std::cout<<"mysql_affected_rows: "<<ret<<std::endl;
     if((uint32_t)-1 == ret){
         std::cout<<"execDelete failed."<<std::endl;
-        dbPool->releaseConn(id);
+        dbPool->DbReleaseConn(id);
         return (void*)-1;
     }
 
     std::cout<<"execDelete success"<<std::endl;
     sleep(2);
-    dbPool->releaseConn(id);
+    dbPool->DbReleaseConn(id);
 
     return NULL;    
 }
 
 int main(){
 
-    MYSQLNAMESPACE::DBPool::DBConnInfo connInfo;
+    MYSQLNAMESPACE::DBConnInfo connInfo;
     connInfo.dbName = "girls";
     connInfo.host = "127.0.0.1";
-    connInfo.passwd = "6E6Zl4cy0z5phqjL";
-    connInfo.port = 3872;
+    connInfo.passwd = "123456";
+    connInfo.port = 3306;
     connInfo.user = "root";
     DBPool dbPool(connInfo);
+
+    auto ret = dbPool.DbCreate(10, 20);
+    if(!ret){
+        printf("DbCreate failed.\n");
+        return -1;
+    }
+
 
     signal(SIGINT, signal_ctrlc);
     pthread_t tid1;
