@@ -30,7 +30,7 @@ void* UpdateFunc1(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
     std::string sql = "UPDATE departments SET department_name='Ttt', location_id='2500' WHERE department_id=270;";
 

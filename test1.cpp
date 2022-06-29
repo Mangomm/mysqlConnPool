@@ -34,7 +34,7 @@ void* SelectFunc1(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
     // 这里的COUNT(*)至少需要比数据库的类型大，因为不知道数据库对COUNT函数返回的结果集取什么，我们最好去无符号的64位，防止数据丢失，这里取了int，32位4字节
     const dbColConn column[] = 
@@ -107,7 +107,7 @@ void* SelectFunc2(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
 
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
@@ -175,7 +175,7 @@ void* SelectFunc3(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     uint32_t retCount = 0;
     
     // 1 内连
@@ -275,7 +275,7 @@ void* SelectFunc4(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
         {{' ',"last_name"},                     DB_DATA_TYPE::DB_STR,           25,     NULL},
@@ -351,7 +351,7 @@ void* SelectFunc5(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
     MYSQLNAMESPACE::dbColConn dbcol1[] = {
         {{' ',"employee_id"},                   DB_DATA_TYPE::DB_LONG,          8,      NULL},

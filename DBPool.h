@@ -11,10 +11,14 @@
 #include "MyLock.h"
 #include "MyTime.h"
 
+namespace MYSQLNAMESPACE{
+
 // 是否对连接池进行debug
 #define _DEBUG_CONN_POOL
+// 是否使用自动加1作为连接的key，定义使用，否则使用时间戳作为连接的key
+//#define _USE_INCREASE_AS_KEY
 
-namespace MYSQLNAMESPACE{
+    typedef long long llong;
 
     /* 主要对应数据库的类型，或者也可以称本程序的类型，但主要作用是为了对接数据库的类型. */
     enum class DB_DATA_TYPE
@@ -96,12 +100,14 @@ public:
     bool init();
     void fini();
 
-    void setStatus(CONN_STATUS connStatus);
-    CONN_STATUS getStatus();
-    int getMyId();
-    time_t getElapse();
     void getConn();
     void releaseConn();
+
+    void setStatus(CONN_STATUS connStatus);
+    CONN_STATUS getStatus();
+    llong getMyId();
+    pthread_t getThreadId();// 获取正在使用该连接的线程id
+    time_t getElapse();
     
 public: 
     int execSql(const char *sql, uint32_t sqlLen);
@@ -118,14 +124,17 @@ private:
     bool connDB();
 
 private:
+
+#ifdef _USE_INCREASE_AS_KEY
     static int _connId;			    //连接的总次数，作为map的key使用.后续建议使用时间戳代替
+#endif
 
     MYSQL *_mysql;					//用于定义一个mysql对象,便于后续操作确定要操作的数据库是哪一个
     DBConnInfo _connInfo;	        //连接信息
     const int _timeout;             //数据库的读写超时时长限制
 
     CONN_STATUS _connStatus;		//连接状态
-    int _myId;						//连接的id，即所有连接数的一个序号
+    llong _myId;				    //连接的id，即所有连接数的一个序号
 
     pthread_t _threadId;            //使用该连接的线程id
     MyTime _myTime;                 //用于记录连接被使用的开始时间和使用时长
@@ -149,39 +158,44 @@ class DBPool
     public:
         // 动态接口
         bool DbCreate(int minConnNum, int maxConnNum);
-        int DbGetConn();
-        void DbReleaseConn(int connId);
+        llong DbGetConn();
+        void DbReleaseConn(llong connId);
 
         int DbDestroy();
         int DbAdjustThread();// 禁止手动调用
 
     public:
         /*支持分组查询(Group by,having)，连接查询(92,99语法都支持)，子查询等多种查询。*/
-        uint32_t execSelect(uint32_t id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
+        uint32_t execSelect(llong id, const char *sql, const dbColConn *col, unsigned char **data, const char *encode, bool isEncode = true);
 
         /*支持单条、批量插入*/
-        uint32_t execInsert(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
+        uint32_t execInsert(llong id, const char *sql, const char *encode, bool isEncode = true);
 
         /* 支持所有的更新，貌似对于不用获取数据的，也是通用的。例如插入。只需要传sql语句，但是有合并插入、更新、删除的必要吗，个人觉得看使用者，我这里就不合并了。 */
-        uint32_t execUpdate(uint32_t id, const char *sql, const char *encode, bool isEncode = true);
+        uint32_t execUpdate(llong id, const char *sql, const char *encode, bool isEncode = true);
 
         /*支持单表的删除(已测试)，多表的连接删除(多表的连接删除看test.cpp的测试，而且需求也不多，遇到的时候大家再搞一下即可)*/
-        uint32_t execDelete(uint32_t id, const char *sql);
+        uint32_t execDelete(llong id, const char *sql);
 
         //显示事务的相关函数
-        bool setTransactions(uint32_t id, bool bSupportTransactions);//设置该连接为显示事务
-        bool commit(uint32_t id);
-		bool rollback(uint32_t id);
+        bool setTransactions(llong id, bool bSupportTransactions);//设置该连接为显示事务
+        bool commit(llong id);
+		bool rollback(llong id);
 
     public:
         void setConnInfo(DBConnInfo &connInfo);
 
     private:
-        std::shared_ptr<DBConn> getConnById(uint32_t id);
+        std::shared_ptr<DBConn> getConnById(llong id);
 
     private:
-        //using MysqlConn = std::map<int, std::shared_ptr<DBConn>>;
-        std::map<int, std::shared_ptr<DBConn>>  _connPool;          /*存放多个连接的容器*/
+    #ifdef _USE_INCREASE_AS_KEY
+        using MysqlConn = std::map<int, std::shared_ptr<DBConn>>;
+    #else
+        using MysqlConn = std::map<llong, std::shared_ptr<DBConn>>;
+        
+    #endif
+        MysqlConn  _connPool;                                       /*存放多个连接的容器*/
         DBConnInfo _connInfo;                                       /*连接信息*/
 
         MyLock _lock;                                               /*用于锁住连接池*/

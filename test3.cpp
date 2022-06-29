@@ -5,6 +5,7 @@
 #include <sstream>
 #include "DBPool.h"
 #include "DBDefine.h"
+#include "MyTime.h"
 using namespace MYSQLNAMESPACE;
 
 
@@ -20,6 +21,7 @@ void* UpdateFunc(void *arg)
 {
     //分离线程，让系统回收线程结束后的资源
     pthread_detach(pthread_self());
+    printf("UpdateFunc start, tid: %lld\n", pthread_self());
 
     if(NULL == arg){
         std::cout<<"DBPool UpdateFunc is null！！！"<<std::endl;
@@ -29,7 +31,7 @@ void* UpdateFunc(void *arg)
     while(true){
         DBPool *dbPool = (DBPool*)arg;
         //int id = dbPool->getConn();
-        int id = dbPool->DbGetConn();
+        auto id = dbPool->DbGetConn();
         
         std::stringstream ss;
         std::string t = "ttt";
@@ -60,6 +62,7 @@ void* SelectFunc(void *arg)
 {
     //分离线程，让系统回收线程结束后的资源
     pthread_detach(pthread_self());
+    printf("SelectFunc start, tid: %lld\n", pthread_self());
 
     if(NULL == arg){
         std::cout<<"DBPool SelectFunc is null！！！"<<std::endl;
@@ -69,7 +72,7 @@ void* SelectFunc(void *arg)
     while (true)
     {
         DBPool *dbPool = (DBPool*)arg;
-        int id = dbPool->DbGetConn();
+        auto id = dbPool->DbGetConn();
         
         /*
             select注意点：
@@ -134,7 +137,7 @@ void* SelectFunc(void *arg)
     #endif
         }
 
-        std::cout<<"tid= "<<pthread_self()<<" select success."<<std::endl;
+        std::cout<<"tid= "<<pthread_self()<<" execSelect success."<<std::endl;
         sleep(5);
         dbPool->DbReleaseConn(id);
 
@@ -147,6 +150,7 @@ void* InsertFunc(void *arg)
 {
     //分离线程，让系统回收线程结束后的资源
     pthread_detach(pthread_self());
+    printf("InsertFunc start, tid: %lld\n", pthread_self());
 
     if(NULL == arg)
     {
@@ -178,12 +182,19 @@ void* InsertFunc(void *arg)
         //     return (void*)-1;//退出之前必须使连接变为空闲可用
         // }
 
-        std::cout<<"tid= "<<pthread_self()<<" insert success."<<std::endl;
+        std::cout<<"tid= "<<pthread_self()<<" execInsert success."<<std::endl;
         sleep(5);
         dbPool->DbReleaseConn(id);
     }
     
     return NULL;
+}
+
+void testTimeStamp(){
+    MyTime tt;
+    tt.debugChronoTimeStamp();
+    tt.debugChronoSteadyTimeStamp();
+    tt.debugUnixTimeStamp();
 }
 
 int main(){
@@ -214,6 +225,9 @@ int main(){
 
     while (!bExit)
     {
+        // 这里建议不要学我多个线程使用一个回调，不然打印出来的内容乱七八糟，不太易看。
+        // 如果一个线程对应一个不同的回调，使打印的内容不同，可以方便调试.
+        // 经过debug，增加调整线程后，目前没有发现问题
         pthread_create(&tid1, NULL, UpdateFunc, (void*)&dbPool);
         pthread_create(&tid2, NULL, SelectFunc, (void*)&dbPool);
         pthread_create(&tid3, NULL, SelectFunc, (void*)&dbPool);

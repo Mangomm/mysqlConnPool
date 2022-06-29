@@ -26,7 +26,7 @@ void* SelectFunc(void *arg)
     }
 
     MYSQLNAMESPACE::DBPool *dbPool = (MYSQLNAMESPACE::DBPool*)arg;
-    int id = dbPool->DbGetConn();
+    auto id = dbPool->DbGetConn();
     
     /*
         select注意点：
@@ -265,7 +265,7 @@ void* deleteFunc(void *arg)
     //     return (void*)-1;
     // }
 
-    sleep(2);
+    //sleep(2);
 
     /*
         2.多表的删除。(留一个未解决的问题：这里多表的删除时，虽然执行成功，但是影响行数返回0，数据库的数据并未被改变；但是直接在navicat执行又没有问题。)
