@@ -661,6 +661,10 @@ namespace MYSQLNAMESPACE
 
         int opt = 1;
         mysql_options(_mysql, MYSQL_OPT_RECONNECT, (char *)&opt);
+        //禁用ssl，否则有的mysql启用ssl(show variables like "%ssl%")，将会连接失败
+        mysql_ssl_mode sslmode = SSL_MODE_DISABLED;
+        mysql_options(_mysql, MYSQL_OPT_SSL_MODE, (void *)&sslmode);
+
         if (!mysql_real_connect(_mysql, _connInfo.host.c_str(), _connInfo.user.c_str(), 
             _connInfo.passwd.c_str(), _connInfo.dbName.c_str(), _connInfo.port, 0, 0))
         {
