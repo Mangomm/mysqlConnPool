@@ -1,9 +1,15 @@
 #ifndef __MYLOCK__H__
 #define __MYLOCK__H__
 
+//本文件后期会删除,锁以后使用C++11的锁,方便跨平台使用
+#if defined(__linux__) || defined(__linux)
 #include <pthread.h>
+#endif
+
 
 namespace MYSQLNAMESPACE{
+
+#if defined(__linux__) || defined(__linux)
     class MyLock{
         public:
             MyLock(){
@@ -56,6 +62,8 @@ namespace MYSQLNAMESPACE{
             pthread_mutex_t *m_pMutex;
         
     };
+
+#endif
 
 }
 

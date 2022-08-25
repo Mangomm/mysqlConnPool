@@ -3,6 +3,7 @@
 
 #include "DBPool.h"
 #include <type_traits>
+#pragma pack(1) 
 
 //需要添加，否则出现test.cpp:64：对‘MYSQLNAMESPACE::DBPool::~DBPool()’未定义的引用
 using namespace MYSQLNAMESPACE;
@@ -16,7 +17,12 @@ struct testDataStruct
 	uint64_t userId;
 	char name[32];
 	unsigned char isOk;
-} __attribute__ ((packed));
+} 
+#if defined(__linux__) || defined(__linux)  
+__attribute__ ((packed));
+#else
+;
+#endif
 
 /*
 	insert时， 想要插入数据的结构.
@@ -26,7 +32,12 @@ struct insertDataStruct
 	uint32_t userId;
 	char name[32];
 	unsigned char isOk;
-} __attribute__ ((packed));
+} 
+#if defined(__linux__) || defined(__linux)  
+__attribute__ ((packed));
+#else
+;
+#endif
 
 /*
 	update时， 想要插入数据的结构.
@@ -35,7 +46,12 @@ struct updateDataStruct
 {
 	char name[32];
 	unsigned char isOk;
-} __attribute__ ((packed));
+} 
+#if defined(__linux__) || defined(__linux) 
+__attribute__((packed));
+#else
+;
+#endif
 
 
 
@@ -48,7 +64,12 @@ struct testDataStruct1
 	char onvif_url[255];
 	char onvif_username[255];
 	char onvif_password[255];
-} __attribute__ ((packed));
+} 
+#if defined(__linux__) || defined(__linux)  
+__attribute__ ((packed));
+#else
+;
+#endif
 
 /*
 	insert时， 想要插入数据的结构.
@@ -77,7 +98,12 @@ struct testDataStruct2
 	char retry_time[8];
 	uint32_t label;
 	unsigned char transmit_type;
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux)  
+__attribute__ ((packed));
+#else
+;
+#endif
 
 //<==test.cpp end==>
 
@@ -85,19 +111,34 @@ struct testfenzu
 {
     int count;
     int dep_id;
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux)  
+__attribute__ ((packed));
+#else
+;
+#endif
 
 struct testConn
 {
     long count;                 // 注意32位的long是4字节。test中的字节数也需要对应改成4.
     char city[30];
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux) 
+__attribute__((packed));
+#else
+	;
+#endif
 
 struct testNeiLian
 {
     long count;                 // 注意32位的long是4字节。test中的字节数也需要对应改成4.
     char city[30];
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux) 
+__attribute__ ((packed));
+#else
+;
+#endif
 
 struct testWaiLian
 {
@@ -106,14 +147,24 @@ struct testWaiLian
     long boysId;
     char boysName[20];
     long boysuserCP;
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux) 
+__attribute__ ((packed));
+#else
+;
+#endif
 
 struct testSubQuery
 {
     char last_name[25];
     char job_id[10];
     double salary;
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux) 
+__attribute__ ((packed));
+#else
+;
+#endif
 
 struct testUnion
 {
@@ -132,6 +183,11 @@ struct testUnion
 	long manager_id;
 	int department_id;
 	char hiredate[40];
-} __attribute__ ((packed));
+}
+#if defined(__linux__) || defined(__linux) 
+__attribute__ ((packed));
+#else
+;
+#endif
 
 #endif

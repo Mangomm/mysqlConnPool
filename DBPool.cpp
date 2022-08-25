@@ -1,10 +1,18 @@
+#if defined(__linux__) || defined(__linux) 
 #include <unistd.h>
+#endif
 #include <sstream>
 #include <string.h>
 #include "DBPool.h"
-#define DEFAULT_TIME 10                 /* xxxs检测一次，时间不建议太短 */
-#define MIN_WAIT_BUSY_CONN_NUM 5        /* 至少存在多少个正在使用的连接才能扩容 */
-#define DEFAULT_CONN_VARY 5             /* 每次创建和销毁连接的最大个数，因为当扩容超过最大限制时不会再扩容，销毁低于最小限制时不会再销毁 */
+#define DEFAULT_TIME 10                 /* xxxs检测一次，时间不建议太短. */
+#define MIN_WAIT_BUSY_CONN_NUM 5        /* 至少存在多少个正在使用的连接才能扩容. */
+#define DEFAULT_CONN_VARY 5             /* 每次创建和销毁连接的最大个数，因为当扩容超过最大限制时不会再扩容，销毁低于最小限制时不会再销毁. */
+
+#if defined(__linux__) || defined(__linux)
+#else
+#define bzero(s, n) memset((void*)(s), 0, (n))
+#define bcopy(src, dst, n) memmove((void*)(dst), src, n)
+#endif
 
 namespace MYSQLNAMESPACE
 {
@@ -25,26 +33,41 @@ namespace MYSQLNAMESPACE
         return _myId;
     }
 
-    pthread_t DBConn::getThreadId(){
-        return _threadId;
-    }
+#if defined(__linux__) || defined(__linux) 
+	pthread_t DBConn::getThreadId() {
+		return _threadId;
+	}
+#else
+	std::thread::id DBConn::getThreadId() {
+		return _threadId;
+	}
+#endif
 
     time_t DBConn::getElapse(){
         return _myTime.elapse();
     }
 
-    /*更新状态等信息*/
+    /* 更新状态等信息. */
     void DBConn::getConn()
     {
         _connStatus = CONN_USING;
-        _threadId = pthread_self();
+#if defined(__linux__) || defined(__linux) 
+		_threadId = pthread_self();
+#else
+		_threadId = std::this_thread::get_id();
+#endif
         _myTime.now();
     }
 
-    /*释放连接，让其给其它线程使用，但不释放*/
+    /* 释放连接，让其给其它线程使用，但不释放. */
     void DBConn::releaseConn()
     {
-        _threadId = 0;
+#if defined(__linux__) || defined(__linux) 
+		_threadId = 0;
+#else
+		std::thread::id tmpTid;//利用临时变量置0
+		_threadId = tmpTid;
+#endif
         _connStatus = CONN_VALID;
     }
 
@@ -69,7 +92,7 @@ namespace MYSQLNAMESPACE
         return false;
     }
 
-    /* 执行sql语句,成功返回0，失败返回-1。*/
+    /* 执行sql语句,成功返回0，失败返回-1. */
     int DBConn::execSql(const char *sql, uint32_t sqlLen)
     {
         if (NULL == sql || 0 == sqlLen || NULL == _mysql)
@@ -92,7 +115,7 @@ namespace MYSQLNAMESPACE
         return ret;
     }
 
-    /* 支持子查询，出错返回-1，成功返回传进col的所有字段类型所占的大小.*/
+    /* 支持子查询，出错返回-1，成功返回传进col的所有字段类型所占的大小. */
     uint32_t DBConn::fetchSelectSql(const char *sql, const dbColConn *col)
     {
         const dbColConn *tmp = col;
@@ -622,12 +645,23 @@ namespace MYSQLNAMESPACE
         return mysql_affected_rows(_mysql);
     }
 
-    /*成功返回受影响的行数，失败返回-1*/
-    uint32_t DBConn::execDelete(const char *sql)
+    /* 成功返回受影响的行数，失败返回-1. */
+    uint32_t DBConn::execDelete(const char *sql, const char *encode, bool isEncode)
     {
         if(NULL == sql || NULL == _mysql){
             return -1;
         }
+
+		// 为空，默认utf8 
+		if (!encode) {
+			encode = "set names utf8";
+		}
+		// 默认设置该参数
+		if (isEncode) {
+			if (mysql_query(_mysql, encode) != 0) {
+				return (uint32_t)-1;
+			}
+		}
 
         if(0 != execSql(sql, ::strlen(sql))){
             return -1;
@@ -636,7 +670,7 @@ namespace MYSQLNAMESPACE
         return mysql_affected_rows(_mysql);
     }
 
-    /*设置显示事务.true设置成功，false设置失败*/
+    /* 设置显示事务.true设置成功，false设置失败. */
     bool DBConn::setTransactions(bool bSupportTransactions)
     {
         if(bSupportTransactions){
@@ -647,7 +681,7 @@ namespace MYSQLNAMESPACE
         }
     }
 
-    /*失败返回false，成功返回true*/
+    /* 失败返回false，成功返回true. */
     bool DBConn::connDB()
     {
         _mysql = mysql_init(NULL);
@@ -669,7 +703,7 @@ namespace MYSQLNAMESPACE
             _connInfo.passwd.c_str(), _connInfo.dbName.c_str(), _connInfo.port, 0, 0))
         {
 #ifdef _DEBUG_CONN_POOL
-            std::cerr<<"mysql connect error:"<<mysql_error(_mysql)<<std::endl;
+            std::cerr<<"mysql connect error: "<<mysql_error(_mysql)<<std::endl;
 #endif
             mysql_close(_mysql);
             _mysql = NULL;
@@ -693,19 +727,24 @@ namespace MYSQLNAMESPACE
 
         while (_shutdown == false) 
         {
-            sleep(DEFAULT_TIME);                                      /*定时 对连接池管理*/
+            //sleep(DEFAULT_TIME);                                      /* 定时 对连接池管理. */
+			std::this_thread::sleep_for(std::chrono::milliseconds(DEFAULT_TIME * 1000));
 
             // 这里获取某个时刻的存活连接数、忙连接数，是为了用同样的值去判断扩容与销毁
             // 满足条件后，应当使用具体的成员变量判断，类似单例的双重否定处理
             int tmp_live_conn_num = _liveConnNum;                  /* 存活 连接数. */
-            int tmp_busy_conn_num = _busyConnNum;                  /* 忙着的线程数 */
+            int tmp_busy_conn_num = _busyConnNum;                  /* 忙着的线程数. */
 #ifdef _DEBUG_CONN_POOL
             printf("tmp_live_conn_num: %d, tmp_busy_conn_num: %d\n", tmp_live_conn_num, tmp_busy_conn_num);
 #endif
 
-            /* 创建新连接 算法： 正在使用的连接大于最少正在连接的个数, 且存活的连接数少于最大连接个数时 如：10>=5 && 30<50*/
+            /* 创建新连接 算法： 正在使用的连接大于最少正在连接的个数, 且存活的连接数少于最大连接个数时 如：10>=5 && 30<50. */
             if (tmp_busy_conn_num >= MIN_WAIT_BUSY_CONN_NUM && tmp_live_conn_num < _maxConnNum) {
-                RallLock rallLock(_lock);
+#if defined(__linux__) || defined(__linux) 
+				RallLock rallLock(_lock);
+#else
+				std::lock_guard<std::mutex> lguard(_lock);
+#endif
                 int add = 0;
 
                 /*
@@ -749,9 +788,13 @@ namespace MYSQLNAMESPACE
                 例，存活的连接=30，而忙的连接12，那么还剩18个是多余的，可以退出.乘以2是防止后续获取连接的请求增多后又要重新创建连接.
             */
             if ((tmp_live_conn_num - (tmp_busy_conn_num * 2)) > 0 &&  tmp_live_conn_num > _minConnNum) {
-                RallLock rallLock(_lock);
+#if defined(__linux__) || defined(__linux) 
+				RallLock rallLock(_lock);
+#else
+				std::lock_guard<std::mutex> lguard(_lock);
+#endif
 
-                /* 一次销毁DEFAULT_THREAD个连接 */
+                /* 一次销毁DEFAULT_THREAD个连接. */
                 int del = 0;
                 for(auto it = _connPool.begin(); it != _connPool.end(); ){
                     if(it->second == NULL){
@@ -852,14 +895,26 @@ namespace MYSQLNAMESPACE
         // 是否需要回收内存，不需要，因为这里使用的是shared_ptr
 
         // 创建调整线程
-        pthread_create(&_adjust, NULL, adjust_thread, (void *)this);
+#if defined(__linux__) || defined(__linux) 
+		pthread_create(&_adjust, NULL, adjust_thread, (void *)this);
+#else
+		_adjust = (std::thread*)new std::thread(adjust_thread, this);
+		if (_adjust == NULL) {
+			printf("new adjust_thread fail.\n");
+			return NULL;
+		}
+#endif
         return true;
     }
 
     llong DBPool::DbGetConn(){
         while (_shutdown == false)
         {
-            RallLock lock(_lock);
+#if defined(__linux__) || defined(__linux) 
+			RallLock rallLock(_lock);
+#else
+			std::lock_guard<std::mutex> lguard(_lock);
+#endif
 
             for(auto it = _connPool.begin(); it != _connPool.end(); ){
                 if(!it->second){
@@ -938,9 +993,10 @@ namespace MYSQLNAMESPACE
                 it++;
             }
 
-            usleep(1000);
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
 #ifdef _DEBUG_CONN_POOL
-            std::cout<<"sleep 1s..."<<std::endl;
+            std::cout<<"sleep 0.1s..."<<std::endl;
 #endif
 
         }// <== while (_shutdown == false) end ==>
@@ -970,7 +1026,20 @@ namespace MYSQLNAMESPACE
         }
 
         _shutdown = true;
-        pthread_join(_adjust, NULL);
+#if defined(__linux__) || defined(__linux)
+		pthread_join(_adjust, NULL);
+#else
+		if (NULL != _adjust) {
+			if (_adjust->joinable()) {
+				_adjust->join();
+#ifdef _DEBUG_CONN_POOL
+				printf("adjust thread(class) has join\n");
+#endif
+			}
+			delete _adjust;
+			_adjust = NULL;
+		}
+#endif
 
 #ifdef _DEBUG_CONN_POOL
         printf("adjust thread has join\n");
@@ -979,7 +1048,7 @@ namespace MYSQLNAMESPACE
         return 0;
     }
 
-    /*根据id获取一个已存在的连接，该id由DBPool::getConn获取.*/
+    /* 根据id获取一个已存在的连接，该id由DBPool::getConn获取. */
     std::shared_ptr<DBConn> DBPool::getConnById(llong id)
     {
         auto ret = _connPool.find(id);
@@ -1007,7 +1076,7 @@ namespace MYSQLNAMESPACE
         }   
     }
 
-    /*成功返回受影响的行数，失败返回-1*/
+    /* 成功返回受影响的行数，失败返回-1. */
     uint32_t DBPool::execInsert(llong id, const char *sql, const char *encode, bool isEncode)
     {
         if(NULL == sql){
@@ -1022,7 +1091,7 @@ namespace MYSQLNAMESPACE
         return conn->execInsert(sql, encode, isEncode);
     }
 
-    /*成功返回受影响的行数，失败返回-1*/
+    /* 成功返回受影响的行数，失败返回-1. */
     uint32_t DBPool::execUpdate(llong id, const char *sql, const char *encode, bool isEncode)
     {
         if(NULL == sql){
@@ -1037,7 +1106,7 @@ namespace MYSQLNAMESPACE
         return conn->execUpdate(sql, encode, isEncode);
     }
 
-    uint32_t DBPool::execDelete(llong id, const char *sql)
+    uint32_t DBPool::execDelete(llong id, const char *sql, const char *encode, bool isEncode)
     {
         if(NULL == sql){
             return -1;
@@ -1048,12 +1117,12 @@ namespace MYSQLNAMESPACE
             return -1;
         }
 
-        return conn->execDelete(sql); 
+        return conn->execDelete(sql, encode, isEncode);
     }
 
     /*
         设置显示事务.true设置成功，false设置失败.
-        注意：查看mysql支持的数据库引擎(SHOW ENGINES;)。默认innodb是支持事务。
+        注意：查看mysql支持的数据库引擎(SHOW ENGINES;)。默认innodb是支持事务.
     */
     bool DBPool::setTransactions(llong id, bool bSupportTransactions)
     {
@@ -1065,7 +1134,7 @@ namespace MYSQLNAMESPACE
         return conn->setTransactions(bSupportTransactions);
     }
 
-    /*显示事务提交成功返回true，失败返回false*/
+    /* 显示事务提交成功返回true，失败返回false. */
     bool DBPool::commit(llong id)
     {
         auto conn = getConnById(id);
@@ -1076,7 +1145,7 @@ namespace MYSQLNAMESPACE
         return (0 == conn->execSql("COMMIT;", ::strlen("COMMIT;")));
     }
 
-    /*回滚事务*/
+    /* 回滚事务. */
     bool DBPool::rollback(llong id)
     {
         auto conn = getConnById(id);

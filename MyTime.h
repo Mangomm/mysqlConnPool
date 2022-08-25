@@ -2,7 +2,9 @@
 #define __MYTIME__H__
 
 #include <ctime>
+#if defined(__linux__) || defined(__linux)
 #include <sys/time.h>
+#endif
 #include <chrono>
 #include <iostream>
 namespace MYSQLNAMESPACE
@@ -80,7 +82,7 @@ namespace MYSQLNAMESPACE
                 auto millsec = getTimeStampMillSec();// 毫秒
                 auto microsec = getTimeStampMicroSec();// 微秒
 
-                std::cout<<"debugChronoTimeStamp(): "<<"秒："<<sec<<"， 毫秒："<<millsec<<"， 微秒："<<microsec<<std::endl;
+                //std::cout<<"debugChronoTimeStamp(): "<<"秒："<<sec<<"， 毫秒："<<millsec<<"， 微秒："<<microsec<<std::endl;
             }
 
             // C++标准库提供了steady clock不会回调的时钟.
@@ -114,7 +116,7 @@ namespace MYSQLNAMESPACE
                 auto millsec = getSteadyTimeStampMillSec();// 毫秒
                 auto microsec = getSteadyTimeStampMicroSec();// 微秒
 
-                std::cout<<"debugChronoSteadyTimeStamp(): "<<"秒："<<sec<<"， 毫秒："<<millsec<<"， 微秒："<<microsec<<std::endl;
+                //std::cout<<"debugChronoSteadyTimeStamp(): "<<"秒："<<sec<<"， 毫秒："<<millsec<<"， 微秒："<<microsec<<std::endl;
             }
 
 #else
@@ -154,7 +156,7 @@ namespace MYSQLNAMESPACE
                 std::cout<<"debugUnixTimeStamp(): "<<"秒："<<sec<<"， 毫秒："<<millsec<<"， 微秒："<<microsec<<std::endl;
             }
 
-#endif
+
 
             bool getUtcDate(SYSTIME_T *sys_t){
                 if(!sys_t){
@@ -188,6 +190,7 @@ namespace MYSQLNAMESPACE
                 printf("year: %d, month: %d, day: %d, hour: %d, min: %d, sec: %d, usec: %lld\n", 
                     (int)systime.date.year, (int)systime.date.mon, (int)systime.date.day, (int)systime.time.hour, (int)systime.time.min, (int)systime.time.sec, (long long)systime.time.usec);
             }
+#endif
 
         private:
             time_t m_start;
